@@ -1,0 +1,26 @@
+# 构建产物（由 build.sh 生成）
+build/
+dmgstage/
+*.app/
+
+# DMG 安装包（发布到 GitHub Releases，不进仓库）
+*.dmg
+
+# 内部开发记录，不是项目文档
+HANDOFF.md
+
+# 编译好的工具二进制（保留源码 Tools/winid/main.swift）
+Tools/winid/winid
+
+# 本地会话/配置数据
+*.json.bak.json
+sessions.json
+groups.json
+sessions.corrupt.json
+
+# macOS / 编辑器杂项
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
