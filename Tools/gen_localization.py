@@ -93,10 +93,23 @@ T = {
     "只删这一条，其他消息不受影响。对话历史里少一段上下文，之后的回答可能不如原来连贯。":
         "Only this message is removed. The chat loses a piece of context, so later answers may be less coherent.",
 
-    # 上下文用量
+    # 上下文用量 / 压缩
     "建议新开话题": "Start a new chat",
-    "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。":
-        "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated; consider a new chat.",
+    "压缩一下": "Compact",
+    "压缩上下文": "Compact context",
+    "把早前的对话压成摘要，腾出上下文": "Summarize earlier turns to free up context",
+    "上下文已压缩": "Context compacted",
+    "正在压缩上下文…": "Compacting context…",
+    "这段对话还短，不需要压缩": "This chat is still short — nothing to compact",
+    "已取消压缩": "Compaction cancelled",
+    "对话在压缩过程中变了，这次没压缩": "The chat changed during compaction, so nothing was compacted",
+    "模型摘要失败，已改用本地摘要": "Model summary failed; used a local digest instead",
+    "正在压缩上下文，等它写完再发": "Compacting context — wait for it to finish before sending",
+    "复制摘要": "Copy summary",
+    "收起": "Hide", "展开": "Show",
+    "输入 / 查看命令": "Type / for commands",
+    "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话或输入 /compact 压缩。":
+        "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated. Start a new chat or type /compact to compact.",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",
     "清空所有归档？": "Clear all archives?", "删除归档？": "Delete archive?",
@@ -292,6 +305,13 @@ INTERP = {
     "%lld 条消息": "%lld messages",
     "按 %@ GB 显存和当前模型（权重 %@ GB，KV 缓存 %@ GB）建议用 %lldK。":
         "Based on %@ GB VRAM and the current model (weights %@ GB, KV cache %@ GB), %lldK is recommended.",
+
+    # 上下文压缩
+    "%lld 条消息 → 摘要": "%lld messages → summary",
+    "模型还没准备好（%@），等加载完再压缩。":
+        "The model isn't ready yet (%@). Try compacting once it has loaded.",
+    "没有这个命令：%@。目前只有 /compact。":
+        "Unknown command: %@. Only /compact is available.",
 }
 
 def esc(s):

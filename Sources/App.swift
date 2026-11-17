@@ -97,6 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             || UserDefaults.standard.bool(forKey: "MDMENUBAR") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { MenuBarController.shared.selfTest() }
         }
+        if ProcessInfo.processInfo.environment["MDCOMPACTTEST"] == "1"
+            || UserDefaults.standard.bool(forKey: "MDCOMPACTTEST") {
+            // 等推理服务就绪（自检里会等到 isCompacting 结束再落盘）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+                ChatStore.shared.selfTestCompact(server: ServerController.shared)
+            }
+        }
     }
 
     /// 被 kill / 注销 / 终端信号打断时也要回收推理子进程，否则它会变成孤儿一直占着显存。

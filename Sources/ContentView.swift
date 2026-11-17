@@ -478,6 +478,9 @@ private struct ChatView: View {
             Spacer()
 
             Menu {
+                Button(L("压缩上下文")) { chat.compact(server: server) }
+                    .disabled(chat.isCompacting)
+                Divider()
                 Button("重新加载模型") { server.restart() }
                 Button("查看运行日志") { showLog.toggle() }
             } label: {
@@ -722,10 +725,16 @@ private struct ChatView: View {
 
             // 快到上限时给一句人话，光看数字很多人不会换算
             if ratio > 0.9 {
-                Text("建议新开话题")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(warn)
-                    .fixedSize()
+                Button {
+                    chat.compact(server: server)
+                } label: {
+                    Text("压缩一下")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(warn)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+                .help(L("把早前的对话压成摘要，腾出上下文"))
             } else if ratio > 0.7 {
                 Text("\(Int(ratio * 100))%")
                     .font(.system(size: 9.5, design: .monospaced))
@@ -734,7 +743,7 @@ private struct ChatView: View {
             }
         }
         .help(ratio > 0.9
-              ? Lf("已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。",
+              ? Lf("已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话或输入 /compact 压缩。",
                    "\(used)", "\(total)", "\(Int(ratio * 100))")
               : Lf("已占用 %@ / %@ tokens", "\(used)", "\(total)"))
     }
@@ -968,6 +977,12 @@ private struct ChatView: View {
             // 候选方向模块：在输入栏上方
             choiceModule
 
+            // 命令反馈（压缩失败、对话太短……）只停几秒，不占对话区
+            commandNoteBar
+
+            // 压缩进行中：给个进度，别让用户以为卡住了
+            compactionBar
+
             // 这段对话有角色提示词时挂一条，能看到它生效了（点开是本对话的编辑器）
             if let role = chat.current?.rolePrompt,
                !role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -995,6 +1010,9 @@ private struct ChatView: View {
                         .fill(Palette.accent.opacity(0.07))
                 )
             }
+
+            // 输入 "/" 时列出可用命令
+            slashPanel
 
             VStack(alignment: .leading, spacing: 8) {
                 PlainTextEditor(
@@ -1136,13 +1154,113 @@ private struct ChatView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(Palette.card))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.border))
 
-            Text("全部计算在本机完成，不联网")
-                .font(.system(size: 9.5))
-                .foregroundStyle(Palette.subtle.opacity(0.75))
+            HStack(spacing: 6) {
+                Text("全部计算在本机完成，不联网")
+                Text("·")
+                Text("输入 / 查看命令")
+            }
+            .font(.system(size: 9.5))
+            .foregroundStyle(Palette.subtle.opacity(0.75))
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var commandNoteBar: some View {
+        if let note = chat.commandNote {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 10))
+                Text(note)
+                    .font(.system(size: 10.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button { chat.dismissCommandNote() } label: {
+                    Image(systemName: "xmark").font(.system(size: 9))
+                }
+                .buttonStyle(.plain)
+            }
+            .foregroundStyle(Palette.subtle)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.subtle.opacity(0.08)))
+        }
+    }
+
+    @ViewBuilder
+    private var compactionBar: some View {
+        if chat.isCompacting {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.75)
+                    .frame(width: 14, height: 14)
+                Text("正在压缩上下文…")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.subtle)
+                Spacer(minLength: 6)
+                Button(L("取消")) { chat.cancelCompaction() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.accent)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.accent.opacity(0.07)))
+        }
+    }
+
+    /// 输入框里以 / 开头时，列出匹配的命令
+    private var slashQuery: String? {
+        guard !input.contains("\n") else { return nil }
+        let t = input.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("/") else { return nil }
+        return t.lowercased()
+    }
+
+    private var slashMatches: [(usage: String, detail: String)] {
+        guard let q = slashQuery else { return [] }
+        return SlashCommand.catalog.filter { $0.usage.hasPrefix(q) }
+    }
+
+    @ViewBuilder
+    private var slashPanel: some View {
+        let items = slashMatches
+        if !items.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    Button {
+                        input = ""
+                        chat.send(item.usage, server: server)
+                        inputFocused = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(item.usage)
+                                .font(.system(size: 11.5, design: .monospaced))
+                                .foregroundStyle(Palette.text)
+                            Text(L(item.detail))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(Palette.subtle)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text("⏎")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(Palette.subtle.opacity(0.6))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if index < items.count - 1 { Divider().opacity(0.5) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.border))
+        }
     }
 
     /// 选上下文档位：超过显存能承载的上限时先弹确认，避免直接加载失败
@@ -1207,6 +1325,15 @@ private struct MessageRow: View {
     }
 
     var body: some View {
+        if message.isSummaryBubble {
+            summaryCard
+        } else {
+            bubble
+        }
+    }
+
+    /// 普通消息气泡
+    private var bubble: some View {
         HStack(alignment: .top, spacing: 0) {
             if message.role == .user { Spacer(minLength: 70) }
 
@@ -1259,6 +1386,63 @@ private struct MessageRow: View {
             if message.role == .assistant { Spacer(minLength: 70) }
         }
         .contextMenu { messageMenu }
+    }
+
+    /// 压缩摘要卡片：跟普通回答区分开——它是"前情提要"，不是模型这一轮说的话
+    @State private var expandedSummary = false
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "rectangle.compress.vertical")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Palette.accent)
+                Text("上下文已压缩")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                if let n = message.summaryCount, n > 0 {
+                    Text(Lf("%lld 条消息 → 摘要", n))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.subtle)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    withAnimation(.easeOut(duration: 0.14)) { expandedSummary.toggle() }
+                } label: {
+                    Text(expandedSummary ? L("收起") : L("展开"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.accent)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if expandedSummary {
+                MarkdownView(source: message.text,
+                             baseSize: 12.5,
+                             textColor: Palette.text,
+                             fillsWidth: true)
+            } else {
+                Text(message.text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.subtle)
+                    .lineSpacing(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Palette.accent.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.accent.opacity(0.22)))
+        .contextMenu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(message.text, forType: .string)
+            } label: {
+                Label("复制摘要", systemImage: "doc.on.doc")
+            }
+        }
     }
 
     @ViewBuilder

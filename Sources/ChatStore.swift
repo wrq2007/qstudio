@@ -68,6 +68,130 @@ final class ChatStore: ObservableObject {
 
     func dismissDataWarning() { dataWarning = nil }
 
+    // MARK: - 上下文压缩（/compact）
+
+    /// 正在等模型写摘要
+    @Published private(set) var isCompacting = false
+    /// 一次性提示（压缩失败、对话太短、命令不认识），输入框上方显示几秒后自己消失
+    @Published private(set) var commandNote: String?
+
+    private var compactTask: Task<Void, Never>?
+    private var noteWorkItem: DispatchWorkItem?
+
+    /// 压缩时保留最近几条消息原文：大约两轮对话。
+    /// 留少了模型不知道"刚才说到哪"，留多了腾不出空间。
+    private static let compactKeepMessages = 4
+
+    func dismissCommandNote() { commandNote = nil }
+
+    private func note(_ text: String) {
+        commandNote = text
+        noteWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.commandNote = nil }
+        noteWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: item)
+    }
+
+    func cancelCompaction() {
+        compactTask?.cancel()
+        compactTask = nil
+        isCompacting = false
+        note(L("已取消压缩"))
+    }
+
+    /// 切出"要压缩的前缀"和"要保留的尾巴"。
+    /// 返回 nil 表示这段对话还不值得压（压缩完反而更长）。
+    private func splitForCompact(_ messages: [ChatMessage]) -> (prefix: [ChatMessage], keepIndex: Int)? {
+        guard !messages.isEmpty else { return nil }
+        var i = messages.count - 1
+        var kept = 0
+        while i >= 0 && kept < Self.compactKeepMessages {
+            let m = messages[i]
+            if !m.text.isEmpty && !m.isChoice && !m.failed { kept += 1 }
+            i -= 1
+        }
+        var start = min(i + 1, messages.count - 1)
+        // 保留区不能以助手消息开头：历史得从用户开口，某些 chat template 会强校验
+        while start > 0 && messages[start].role == .assistant { start -= 1 }
+        guard start > 0 else { return nil }
+        let prefix = Array(messages[0..<start])
+        guard prefix.contains(where: { !$0.text.isEmpty && !$0.isChoice }) else { return nil }
+        return (prefix, start)
+    }
+
+    /// 压缩当前对话：模型写摘要 → 摘要顶替早前原文，最近几轮保持不变
+    func compact(server: ServerController) {
+        guard !isCompacting else { return }
+        if isStreaming { stop() }
+        guard let cur = current else { return }
+        guard server.state.isReady else {
+            note(Lf("模型还没准备好（%@），等加载完再压缩。", server.state.label))
+            return
+        }
+        guard let split = splitForCompact(cur.messages) else {
+            note(L("这段对话还短，不需要压缩"))
+            return
+        }
+
+        let sessionID = cur.id
+        let total = cur.messages.count
+        let transcript = ContextCompactor.transcript(
+            split.prefix,
+            charBudget: ContextCompactor.charBudget(contextSize: server.contextSize))
+        pendingChoice = nil
+        isCompacting = true
+
+        compactTask = Task { [weak self] in
+            guard let self else { return }
+            let summary = await ContextCompactor.summarize(transcript: transcript,
+                                                           server: server,
+                                                           session: self.session)
+            if Task.isCancelled { return }
+            await MainActor.run {
+                self.compactTask = nil
+                self.isCompacting = false
+                self.applyCompaction(sessionID: sessionID,
+                                     keepIndex: split.keepIndex,
+                                     totalCount: total,
+                                     prefix: split.prefix,
+                                     summary: summary,
+                                     server: server)
+            }
+        }
+    }
+
+    private func applyCompaction(sessionID: UUID,
+                                 keepIndex: Int,
+                                 totalCount: Int,
+                                 prefix: [ChatMessage],
+                                 summary: ContextCompactor.Summary?,
+                                 server: ServerController) {
+        guard let idx = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        // 压缩期间用户可能已经删了消息/换了对话：对不上就不动，别把历史切歪
+        guard sessions[idx].messages.count == totalCount,
+              keepIndex > 0, keepIndex <= sessions[idx].messages.count else {
+            note(L("对话在压缩过程中变了，这次没压缩"))
+            return
+        }
+        let text = summary?.text ?? ContextCompactor.localDigest(prefix)
+        let bubble = ChatMessage(role: .assistant,
+                                 text: text,
+                                 isSummary: true,
+                                 summaryCount: prefix.count)
+        sessions[idx].messages.removeFirst(keepIndex)
+        sessions[idx].messages.insert(bubble, at: 0)
+        sessions[idx].updatedAt = Date()
+        scheduleSave()
+
+        if currentID == sessionID {
+            promptTokens = 0
+            generatedTokens = 0
+            // 重新数一遍占用，压缩完立刻能看到省了多少
+            refreshTokenUsageFallback(server: server)
+        }
+        if summary == nil { note(L("模型摘要失败，已改用本地摘要")) }
+    }
+
     private var task: Task<Void, Never>?
     /// 生成标题用的独立任务（不参与 generation，避免被 stop 误取消主流程）
     private var titleTask: Task<Void, Never>?
@@ -238,10 +362,9 @@ final class ChatStore: ObservableObject {
     /// 服务端没回 usage 时的兜底：把这一轮真正发出去的提示拼起来，走 /tokenize 数一遍。
     /// 只在这轮结束时调用，不阻塞流式过程。
     func refreshTokenUsageFallback(server: ServerController) {
-        guard promptTokens == 0, let cur = current else { return }
-        let prompt = ([Self.composeSystem(identity: Self.identityPrompt, role: cur.rolePrompt)]
-                      + cur.messages.filter { !$0.text.isEmpty }.map { $0.text })
-            .joined(separator: "\n")
+        guard promptTokens == 0, current != nil else { return }
+        // 用真正会发出去的 payload 数，压缩摘要/系统提示词都算在里面
+        let prompt = buildPayload().map { $0["content"] ?? "" }.joined(separator: "\n")
         guard !prompt.isEmpty else { return }
         var req = URLRequest(url: server.baseURL.appendingPathComponent("tokenize"))
         req.httpMethod = "POST"
@@ -516,6 +639,15 @@ final class ChatStore: ObservableObject {
     func send(_ raw: String, server: ServerController) {
         let input = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
+        // 斜杠命令不发模型：它改的是本地状态，不该进对话历史
+        if let cmd = SlashCommand.parse(input) {
+            run(command: cmd, server: server)
+            return
+        }
+        if isCompacting {
+            note(L("正在压缩上下文，等它写完再发"))
+            return
+        }
         // 生成过程中也能发：先停下当前生成（已生成的部分保留），再把新消息发出去
         if isStreaming { stop() }
         pendingChoice = nil
@@ -548,16 +680,45 @@ final class ChatStore: ObservableObject {
         generatedTokens = 0
 
         // 发给模型的历史：身份 + 这段对话的角色提示词，合成一条 system 消息
-        var payload: [[String: String]] = []
-        payload.append(["role": "system",
-                        "content": Self.composeSystem(identity: Self.identityPrompt,
-                                                      role: current?.rolePrompt)])
-        for m in messages where m.id != botID && !m.failed && !m.text.isEmpty {
-            payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
-        }
+        let payload = buildPayload(excluding: botID)
 
         run(payload: payload, forceQuestion: false, botID: botID, server: server,
             sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
+    }
+
+    /// 斜杠命令分发
+    private func run(command: SlashCommand, server: ServerController) {
+        switch command {
+        case .compact:
+            compact(server: server)
+        case .unknown(let name):
+            note(Lf("没有这个命令：%@。目前只有 /compact。", name))
+        }
+    }
+
+    /// 拼这一轮发给模型的完整消息。
+    ///
+    /// 只有一条 system：身份 + 角色提示词，压缩摘要也并进这条。
+    /// 摘要不伪造成一轮对话——历史从 assistant 开口时，有些 chat template 会直接报错。
+    private func buildPayload(excluding excludedID: UUID? = nil,
+                              extraSystem: String? = nil,
+                              includeChoice: Bool = true) -> [[String: String]] {
+        var system = Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt)
+        var summaryParts: [String] = []
+        var history: [[String: String]] = []
+        for m in messages where m.id != excludedID && !m.failed && !m.text.isEmpty {
+            if m.isSummaryBubble {
+                summaryParts.append(m.text)
+                continue
+            }
+            if m.isChoice && !includeChoice { continue }
+            history.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
+        }
+        for s in summaryParts {
+            system += "\n\n（以下是本次对话早前部分的压缩摘要，原文已移除）\n" + s
+        }
+        if let extraSystem, !extraSystem.isEmpty { system += "\n\n" + extraSystem }
+        return [["role": "system", "content": system]] + history
     }
 
     /// 挑了一个候选方向
@@ -574,14 +735,7 @@ final class ChatStore: ObservableObject {
 
     /// 拼这一轮要发出去的完整历史（identity + 角色 + 除指定消息外的全部消息）
     private func payloadExcluding(_ excludedID: UUID?) -> [[String: String]] {
-        var payload: [[String: String]] = []
-        payload.append(["role": "system",
-                        "content": Self.composeSystem(identity: Self.identityPrompt,
-                                                      role: current?.rolePrompt)])
-        for m in messages where m.id != excludedID && !m.failed && !m.text.isEmpty {
-            payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
-        }
-        return payload
+        buildPayload(excluding: excludedID)
     }
 
     /// 重新生成：删掉这条及之后的消息，用剩下的前缀重发。
@@ -673,6 +827,74 @@ final class ChatStore: ObservableObject {
         messages.first { $0.id == id }
     }
 
+    /// MDCOMPACTTEST=1：在临时会话里跑一遍 /compact，把结果落盘核对，跑完删掉临时会话。
+    /// 只用假数据，不碰真实对话。
+    func selfTestCompact(server: ServerController) {
+        guard ProcessInfo.processInfo.environment["MDCOMPACTTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDCOMPACTTEST") else { return }
+        let sid = newSession(select: true)
+        let turns: [(String, String)] = [
+            ("我们在整理一份野外地质记录，先把点位信息过一遍。", "好的，请把点位和岩性数据发我。"),
+            ("点位 A 在北纬 34.2，岩性是灰岩。", "已记下：A 点 N34.2，灰岩。"),
+            ("点位 B 在北纬 34.5，岩性是砂岩，倾角 30 度。", "已记下：B 点 N34.5，砂岩，倾角 30 度。"),
+            ("帮我算一下两点之间的直线距离。", "粗略估算约 33.4 公里。"),
+            ("按这个结果写一段结论。", "结论：A、B 两点相距约 33.4 km，岩性由灰岩过渡为砂岩。")
+        ]
+        let seeded = turns.flatMap {
+            [ChatMessage(role: .user, text: $0.0), ChatMessage(role: .assistant, text: $0.1)]
+        }
+        mutateCurrent { s in s.messages = seeded }
+        let before = messages.count
+        compact(server: server)
+
+        var waited = 0
+        var settled = 0
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            waited += 1
+            if self.isCompacting && waited <= 150 { return }
+            settled += 1
+            guard settled >= 3 || waited > 150 else { return }
+            t.invalidate()
+            let cur = self.sessions.first { $0.id == sid }
+            var lines: [String] = []
+            lines.append("压缩前消息数：\(before)")
+            lines.append("压缩后消息数：\(cur?.messages.count ?? -1)")
+            lines.append("首条是摘要：\((cur?.messages.first?.isSummaryBubble ?? false) ? "是" : "否")")
+            lines.append("顶替条数：\(cur?.messages.first?.summaryCount ?? -1)")
+            lines.append("首条角色：\((cur?.messages.first?.role == .user) ? "user" : "assistant")")
+            lines.append("其后角色序：\(cur?.messages.dropFirst().map { $0.role == .user ? "u" : "a" }.joined() ?? "")")
+            lines.append("摘要文本：\n\((cur?.messages.first?.text ?? "").prefix(700))")
+            lines.append("--- payload（应只有一条 system，摘要并进去）---")
+            for (i, m) in self.buildPayload().enumerated() {
+                let content = m["content"] ?? ""
+                lines.append("[\(i)] \(m["role"] ?? "?") \(content.count) 字：\(content.prefix(180))")
+            }
+            lines.append("commandNote=\(self.commandNote ?? "nil")")
+            lines.append("isCompacting=\(self.isCompacting)")
+            lines.append("压缩后 token 占用：prompt=\(self.promptTokens) generated=\(self.generatedTokens)")
+
+            // 纯逻辑核对：命令解析 / 预算截断 / 本地兜底
+            func cmd(_ s: String) -> String {
+                switch SlashCommand.parse(s) {
+                case .compact: return "compact"
+                case .unknown(let n): return "unknown(\(n))"
+                case nil: return "nil"
+                }
+            }
+            lines.append("--- 命令解析 ---")
+            lines.append("/compact→\(cmd("/compact"))  /压缩→\(cmd("/压缩"))  /foo→\(cmd("/foo"))  单斜杠→\(cmd("/"))  普通文本→\(cmd("你好"))  含换行→\(cmd("/compact\n多行"))")
+            lines.append("--- 预算截断（charBudget=200）---")
+            lines.append(ContextCompactor.transcript(seeded, charBudget: 200))
+            lines.append("--- 本地兜底摘要 ---")
+            lines.append(ContextCompactor.localDigest(Array(seeded.prefix(6))))
+            try? lines.joined(separator: "\n").write(toFile: "/tmp/qstudio_compact.txt",
+                                                     atomically: true, encoding: .utf8)
+            self.delete(sid)
+            UserDefaults.standard.removeObject(forKey: "MDCOMPACTTEST")
+        }
+    }
+
     /// 让模型给出几个候选方向。
     ///
     /// 用 JSON schema 约束输出（llama.cpp 会转成语法强约束生成），格式一定合法；
@@ -696,17 +918,12 @@ final class ChatStore: ObservableObject {
         isStreaming = true
         generatedTokens = 0
 
-        var payload: [[String: String]] = []
-        payload.append(["role": "system",
-                        "content": Self.composeSystem(identity: Self.identityPrompt,
-                                                      role: current?.rolePrompt)])
-        payload.append(["role": "system",
-                        "content": "用户还没有明确方向。请你提出一个澄清问题，给出 3 到 5 个具体的选项供用户挑选。"
-                        + "如果这些选项可以并存、用户可能同时选多个，就把 multi 设为 true（多选）；"
-                        + "如果是互斥的、只能选一个，就把 multi 设为 false（单选）。"])
-        for m in messages where m.id != botID && !m.failed && !m.text.isEmpty && !m.isChoice {
-            payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
-        }
+        let payload = buildPayload(
+            excluding: botID,
+            extraSystem: "用户还没有明确方向。请你提出一个澄清问题，给出 3 到 5 个具体的选项供用户挑选。"
+                + "如果这些选项可以并存、用户可能同时选多个，就把 multi 设为 true（多选）；"
+                + "如果是互斥的、只能选一个，就把 multi 设为 false（单选）。",
+            includeChoice: false)
 
         let schema: [String: Any] = [
             "type": "object",

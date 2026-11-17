@@ -27,6 +27,13 @@ enum SessionExporter {
         }
         out += "\n---\n\n"
         for m in s.messages where !m.isChoice {
+            if m.isSummaryBubble {
+                out += "## 上下文摘要"
+                if let n = m.summaryCount, n > 0 { out += "（顶替 \(n) 条消息）" }
+                out += "\n\n> 以下为此前对话的压缩摘要，原文已移除。\n\n"
+                out += m.text.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
+                continue
+            }
             let who = m.role == .user ? "用户" : "助手"
             out += "## \(who)\n\n"
             if !m.reasoning.isEmpty {
@@ -68,6 +75,10 @@ enum SessionExporter {
                     "text": m.text
                 ]
                 if !m.reasoning.isEmpty { d["reasoning"] = m.reasoning }
+                if m.isSummaryBubble {
+                    d["isSummary"] = true
+                    d["summaryCount"] = m.summaryCount ?? 0
+                }
                 if m.promptTokens > 0 { d["promptTokens"] = m.promptTokens }
                 if m.generatedTokens > 0 { d["generatedTokens"] = m.generatedTokens }
                 if m.tps > 0 { d["tps"] = m.tps }

@@ -12,6 +12,12 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     /// 这条是模型抛回来的「候选方向」请求，对话区不显示，只出现在输入栏上方的模块里
     var isChoice: Bool
 
+    /// /compact 生成的摘要气泡：它顶替了前面若干条原文，对话区单独渲染成一张卡片。
+    /// 用可选类型：旧数据没有这个字段，解码时不会因为缺 key 失败。
+    var isSummary: Bool?
+    /// 这张摘要顶替了多少条消息（只用于显示）
+    var summaryCount: Int?
+
     // 推理指标（每条消息独立，避免串台）
     var promptTokens: Int = 0       // 输入 token 数
     var generatedTokens: Int = 0    // 输出 token 数
@@ -26,6 +32,8 @@ struct ChatMessage: Identifiable, Equatable, Codable {
          tps: Double = 0,
          failed: Bool = false,
          isChoice: Bool = false,
+         isSummary: Bool? = nil,
+         summaryCount: Int? = nil,
          promptTokens: Int = 0,
          generatedTokens: Int = 0,
          promptTPS: Double = 0,
@@ -38,12 +46,17 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         self.tps = tps
         self.failed = failed
         self.isChoice = isChoice
+        self.isSummary = isSummary
+        self.summaryCount = summaryCount
         self.promptTokens = promptTokens
         self.generatedTokens = generatedTokens
         self.promptTPS = promptTPS
         self.promptMS = promptMS
         self.perTokenMS = perTokenMS
     }
+
+    /// 摘要卡片的判定（可选字段的方便写法）
+    var isSummaryBubble: Bool { isSummary == true }
 }
 
 /// 一段对话用的采样参数。三档预设是给普通用户的，高级面板留给想细调的人。
