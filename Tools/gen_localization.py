@@ -199,8 +199,16 @@ INTERP = {
     "估算显存 %@ GB": "Est. VRAM %@ GB",
     "KV 缓存 %@ GB": "KV cache %@ GB",
     "显存 %@ GB · 上下文 %@": "VRAM %@ GB · Context %@",
-    "显存估算 = 权重文件 + KV 缓存(fp16, ctx %@) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。":
-        "VRAM estimate = weights + KV cache (fp16, ctx %@) + runtime overhead (0.6 GB + weights×5%). Estimate only; actual usage varies with context.",
+    "显存估算 = 权重文件 + KV 缓存(%@) + 运行时开销(0.6 GB + 权重×5%)，按 %@ 上下文计算。只是估算，实际占用随上下文长度浮动。":
+        "VRAM estimate = weights + KV cache (%@) + runtime overhead (0.6 GB + weights×5%), at %@ context. Estimate only; actual usage varies with context.",
+
+    # KV 量化
+    "KV 缓存精度": "KV cache precision",
+    "KV 缓存会随上下文长度线性增长，压到 8 位大约省一半显存，同样的显存能开两倍上下文。切换后模型会重新加载。":
+        "The KV cache grows linearly with context length. Compressing it to 8-bit saves roughly half the memory, so the same VRAM fits about twice the context. Switching reloads the model.",
+    "KV 量化启动失败，已自动回退 fp16": "KV quantization failed to start; fell back to fp16",
+    "该架构不支持 KV 量化，保持 fp16": "This architecture does not support KV quantization; staying on fp16",
+    "KV 量化启动失败，改用 fp16 重试：%@": "KV quantization failed to start, retrying with fp16: %@",
 
     # ContentView 上下文/显存档位
     "建议 %lldK": "Suggest %lldK",

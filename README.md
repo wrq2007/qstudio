@@ -116,7 +116,9 @@ Q Studio **不在应用内下载模型**。打开「模型管理 → 获取模�
 
 - 换更小的量化（Q4_K_M 比 Q8_0 省一半）
 - 调小上下文长度（工具条的「上下文」按钮）
-- 显存估算 = 权重 + KV 缓存(fp16) + 运行时开销，仅供参考；实际占用随上下文浮动
+- 保持 KV 缓存量化开启（设置 →「KV 缓存精度」→ q8_0）：KV 缓存随上下文线性增长，
+  压到 8 位大约省一半，同样显存能开两倍上下文。启动时若模型不支持会自动回退 fp16
+- 显存估算 = 权重 + KV 缓存 + 运行时开销，仅供参考；实际占用随上下文浮动
 
 ---
 
@@ -166,6 +168,8 @@ Q Studio **不在应用内下载模型**。打开「模型管理 → 获取模�
 - **工作组**：左栏上半是工作组（对话分组），下半是对话。选中组后新开的对话自动归组；也可右键对话加入/移出组。删除组不删对话，只把它们变成未分组。
 - **对话**：流式输出、Markdown、代码高亮、SVG 自动渲染（裸 `<svg>` 也能识别）、思考过程折叠显示、消息级性能指标（token 数 / TPS / 耗时）。
 - **深度思考**：输入框右下角开关，控制模型是否输出思维链（会重载模型）。
+- **KV 缓存量化**：默认开 q8_0，长上下文下省一半 KV 显存；启动失败自动回退 fp16，显存估算同步按实际精度计算。
+- **菜单栏**：常驻菜单栏图标，点开可切最近 5 个对话；关窗口不退出，推理服务继续保留。
 - **归档**：对话右键归档，归档内容在「设置 → 归档的对话」里管理和恢复。
 - **标题**：首轮对话后由模型自动生成短标题，失败时回退为第一条消息截断。
 
@@ -303,7 +307,10 @@ Context length defaults to 8192 and is adjustable in the toolbar (2K–32K).
 
 - Use a smaller quantization (Q4_K_M is about half the size of Q8_0)
 - Reduce context length (the toolbar's context button)
-- VRAM estimates = weights + KV cache (fp16) + runtime overhead, for reference only; actual usage varies with context
+- Keep KV cache quantization on (Settings → "KV cache precision" → q8_0): the cache grows
+  linearly with context, and 8-bit halves it, so the same VRAM fits twice the context.
+  If the model cannot start with it, the app falls back to fp16 automatically
+- VRAM estimates = weights + KV cache + runtime overhead, for reference only; actual usage varies with context
 
 ---
 
@@ -350,6 +357,8 @@ Other Intel platforms (integrated GPUs, NVIDIA cards with 1401) work in theory b
 - **Workspaces**: left pane is split — groups on top, chats below. New chats are automatically added to the selected group; right-click a chat to add/remove it. Deleting a group doesn't delete its chats, it just ungroups them.
 - **Chat**: streaming output, Markdown, syntax highlighting, automatic SVG rendering (bare `<svg>` supported), collapsible reasoning, per-message performance metrics (token counts / TPS / latency).
 - **Deep Thinking**: toggle at the bottom right of the input box controls whether the model emits chain-of-thought (reloads the model).
+- **KV cache quantization**: q8_0 by default — halves KV memory at long context. Falls back to fp16 automatically if the model cannot start, and VRAM estimates follow the precision actually in use.
+- **Menu bar**: a status bar icon lists the 5 most recent chats; closing the window no longer quits, so the inference service keeps running.
 - **Archive**: right-click a chat to archive; manage and restore under Settings → Archived chats.
 - **Titles**: a short title is generated after the first exchange, falling back to a truncated first message on failure.
 

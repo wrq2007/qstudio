@@ -18,10 +18,29 @@ struct GGUFInfo {
         return 0
     }
 
-    /// 每 token 的 KV 缓存字节数（fp16，K + V 两份）
-    var kvBytesPerToken: Int {
-        2 * blockCount * headCountKV * headDim * 2
+    /// KV 缓存精度：q8_0 每个元素 1 字节再加 1/32 的 fp16 缩放系数，实测约 1.0625 字节；
+    /// fp16 是 2 字节。量化后同样的显存能装下接近两倍的上下文。
+    enum KVType {
+        case fp16
+        case q8_0
+
+        var bytesPerElement: Double {
+            switch self {
+            case .fp16: return 2
+            case .q8_0: return 1.0625
+            }
+        }
+
+        var label: String { self == .q8_0 ? "q8_0" : "fp16" }
     }
+
+    /// 每 token 的 KV 缓存字节数（K + V 两份）
+    func kvBytesPerToken(_ type: KVType = .fp16) -> Int {
+        Int((Double(2 * blockCount * headCountKV * headDim) * type.bytesPerElement).rounded())
+    }
+
+    /// 兼容旧调用：默认 fp16
+    var kvBytesPerToken: Int { kvBytesPerToken(.fp16) }
 
     var summary: String {
         var parts: [String] = []
@@ -255,6 +274,7 @@ enum ContextAdvisor {
         let vramGB: Double
         let maxContext: Int
         let info: GGUFInfo
+        let kvType: GGUFInfo.KVType
 
         /// 推荐值是不是已经到顶了（再往上显存就不够了）
         var atLimit: Bool { maxContext < recommended * 2 }
@@ -266,18 +286,20 @@ enum ContextAdvisor {
     static func advise(vramGB: Double,
                        modelPath: String,
                        info: GGUFInfo?,
-                       options: [Int]) -> Advice? {
+                       options: [Int],
+                       kvType: GGUFInfo.KVType = .fp16) -> Advice? {
         guard vramGB > 0, !modelPath.isEmpty,
-              let info, info.kvBytesPerToken > 0 else { return nil }
+              let info, info.kvBytesPerToken(kvType) > 0 else { return nil }
 
         let weightsGB = Double(info.fileSize) / 1_073_741_824
         let overheadGB = 0.6 + weightsGB * 0.05
         let freeGB = vramGB * headroomRatio - weightsGB - overheadGB
-        let maxContext = freeGB > 0 ? Int(freeGB * 1_073_741_824 / Double(info.kvBytesPerToken)) : 0
+        let perToken = info.kvBytesPerToken(kvType)
+        let maxContext = freeGB > 0 ? Int(freeGB * 1_073_741_824 / Double(perToken)) : 0
 
         let sorted = options.sorted()
         let recommended = sorted.last { Double($0) <= Double(maxContext) } ?? sorted.first ?? 8192
-        let kvGB = Double(info.kvBytesPerToken * recommended) / 1_073_741_824
+        let kvGB = Double(perToken * recommended) / 1_073_741_824
 
         return Advice(recommended: recommended,
                       weightsGB: weightsGB,
@@ -286,6 +308,7 @@ enum ContextAdvisor {
                       freeGB: freeGB,
                       vramGB: vramGB,
                       maxContext: maxContext,
-                      info: info)
+                      info: info,
+                      kvType: kvType)
     }
 }

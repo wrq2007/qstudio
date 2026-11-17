@@ -15,7 +15,11 @@
 "8B 档位。权重 4.7 GB 加 1.1 GB KV 缓存，8 GB 显存属于偏紧。" = "8B tier: 4.7 GB weights + 1.1 GB KV cache — tight on 8 GB.";
 "KV 缓存" = "KV cache";
 "KV 缓存 %@ GB" = "KV cache %@ GB";
+"KV 缓存会随上下文长度线性增长，压到 8 位大约省一半显存，同样的显存能开两倍上下文。切换后模型会重新加载。" = "The KV cache grows linearly with context length. Compressing it to 8-bit saves roughly half the memory, so the same VRAM fits about twice the context. Switching reloads the model.";
+"KV 缓存精度" = "KV cache precision";
 "KV 缓存随长度线性增长，改完会重新加载模型" = "KV cache grows linearly with length; changing it reloads the model";
+"KV 量化启动失败，已自动回退 fp16" = "KV quantization failed to start; fell back to fp16";
+"KV 量化启动失败，改用 fp16 重试：%@" = "KV quantization failed to start, retrying with fp16: %@";
 "Meta 的 3B，多语言和英文更顺，中文一般。" = "Meta's 3B: strong in English and multilingual, average in Chinese.";
 "Phi-3.5 的高精度档，KV 缓存依旧占 3 GB。" = "High-precision Phi-3.5 tier; KV cache still about 3 GB.";
 "Q Studio 不在应用内下载模型。点击下面的链接在浏览器中打开，下载 .gguf 后放进 ~/models、~/Downloads 或 App Support 目录，回到「本机模型」即可使用。" = "Q Studio does not download models in-app. Open the links below in your browser, download a .gguf into ~/models, ~/Downloads, or App Support, then use it from Local models.";
@@ -134,8 +138,8 @@
 "显存" = "VRAM";
 "显存 %@ GB · 上下文 %@" = "VRAM %@ GB · Context %@";
 "显存 %@ GB 装不下 %@K 的 KV 缓存（约 %@ GB）。模型可能加载失败或回退到内存，速度大降。建议不超过 %@K。" = "%@ GB VRAM can't hold the %@K KV cache (~%@ GB). The model may fail to load or fall back to memory, slowing down significantly. Keep at or below %@K.";
+"显存估算 = 权重文件 + KV 缓存(%@) + 运行时开销(0.6 GB + 权重×5%)，按 %@ 上下文计算。只是估算，实际占用随上下文长度浮动。" = "VRAM estimate = weights + KV cache (%@) + runtime overhead (0.6 GB + weights×5%), at %@ context. Estimate only; actual usage varies with context.";
 "显存估算 = 权重文件 + KV 缓存(fp16) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。" = "VRAM estimate = weights + KV cache (fp16) + runtime overhead (0.6 GB + weights×5%). Estimate only; actual usage varies with context.";
-"显存估算 = 权重文件 + KV 缓存(fp16, ctx %@) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。" = "VRAM estimate = weights + KV cache (fp16, ctx %@) + runtime overhead (0.6 GB + weights×5%). Estimate only; actual usage varies with context.";
 "显存可能不够" = "Possibly not enough VRAM";
 "显存和当前模型（权重" = "GB VRAM and the current model (weights";
 "显存约 %.1f GB，偏小：只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。" = "About %.1f GB VRAM — on the small side. Only quantized models under 1.5B will run; long contexts spill to system memory and slow down.";
@@ -198,6 +202,7 @@
 "设置" = "Settings";
 "设置：系统提示词、上下文默认值" = "Settings: system prompt, context defaults";
 "试着问点什么" = "Ask something to get started";
+"该架构不支持 KV 量化，保持 fp16" = "This architecture does not support KV quantization; staying on fp16";
 "说点什么…" = "Say something…";
 "读不到对话文件，已另存原件。本次是空对话。" = "Couldn't read the chat file; original saved separately. Starting empty.";
 "调整上下文长度" = "Adjust context length";

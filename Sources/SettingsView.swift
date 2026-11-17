@@ -57,6 +57,7 @@ struct SettingsView: View {
                         languageSection
                         systemPrompt
                         contextSection
+                        kvSection
                     case .archives:
                         archivedSection
                     case .about:
@@ -205,6 +206,48 @@ struct SettingsView: View {
                         a.recommended / 1024))
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.subtle)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: KV 缓存精度
+
+    private var kvSection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("KV 缓存精度")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Palette.text)
+
+            HStack(spacing: 8) {
+                ForEach([GGUFInfo.KVType.q8_0, GGUFInfo.KVType.fp16], id: \.self) { t in
+                    let on = server.kvQuant == (t == .q8_0)
+                    Button {
+                        server.setKVQuant(t == .q8_0)
+                    } label: {
+                        Text(t.label)
+                            .font(.system(size: 11.5, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? .white : Palette.text.opacity(0.85))
+                            .frame(width: 58, height: 24)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(on ? Palette.accent : Palette.subtle.opacity(0.12))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+
+            Text("KV 缓存会随上下文长度线性增长，压到 8 位大约省一半显存，同样的显存能开两倍上下文。切换后模型会重新加载。")
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.subtle)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let note = server.kvQuantNote {
+                Text(note)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(red: 0.80, green: 0.50, blue: 0.10))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

@@ -44,6 +44,22 @@ final class ServerController: ObservableObject {
     /// 当前模型的架构信息（从 GGUF 文件头读的），KV 缓存按真实参数算
     @Published private(set) var modelInfo: GGUFInfo?
 
+    /// KV 缓存量化开关：q8_0 省一半 KV 显存，8 GB 机器上上下文能开大一倍
+    @Published private(set) var kvQuant: Bool
+
+    /// 这次启动 KV 量化是否真的生效（架构不支持或用户关掉时为 false）
+    @Published private(set) var kvQuantActive: Bool = false
+
+    /// 量化导致启动失败后自动回退了一次，界面据此提示用户
+    @Published private(set) var kvQuantFellBack: Bool = false
+
+    /// 量化失败过一次：本次启动先不用量化重试（用户手动重启后清空）
+    private var suppressQuant = false
+
+    /// 最近一次真正传给推理进程的参数（自检用）
+    private(set) var lastArguments: [String] = []
+    private var kvFallbackTried = false
+
     /// 上下文长度可选档位。KV 缓存随上下文线性增长，显存吃紧时别往上调。
     static let contextOptions = [2048, 4096, 8192, 16384, 32768]
 
@@ -75,6 +91,10 @@ final class ServerController: ObservableObject {
             defaults.set(false, forKey: "thinkEnabled")
         }
         thinkEnabled = defaults.bool(forKey: "thinkEnabled")
+        if defaults.object(forKey: "kvQuant") == nil {
+            defaults.set(true, forKey: "kvQuant")   // 默认开：省显存，质量损失可忽略
+        }
+        kvQuant = defaults.bool(forKey: "kvQuant")
 
         let savedCtx = defaults.integer(forKey: "contextSize")
         if savedCtx > 0, ServerController.contextOptions.contains(savedCtx) {
@@ -87,6 +107,46 @@ final class ServerController: ObservableObject {
     func setGPU(vramGB: Double) {
         guard abs(self.vramGB - vramGB) > 0.01 else { return }
         self.vramGB = vramGB
+    }
+
+    /// 实际生效的 KV 精度：只有用户开着、且架构支持时才是 q8_0
+    var activeKVType: GGUFInfo.KVType {
+        // 回退过、或被抑制时实际生效的是 fp16——估算要跟着实际走，否则会低估显存
+        (kvQuant && !kvQuantFellBack && !suppressQuant
+            && Self.kvQuantSupported(architecture: modelInfo?.architecture, name: modelName))
+            ? .q8_0 : .fp16
+    }
+
+    /// 当前模型是否支持 KV 量化。
+    /// 线性注意力 / 状态空间模型（Mamba、RWKV、Jamba、Falcon-H1）没有常规 KV 缓存，
+    /// 量化参数对它们没有意义；MoE 架构上 llama.cpp 的 -fa 行为还没验证过，一并跳过。
+    static func kvQuantSupported(architecture: String?, name: String) -> Bool {
+        let a = (architecture ?? "").lowercased()
+        if a.isEmpty { return true }   // 读不到架构时按支持处理，失败会自动回退
+        let linear = ["mamba", "rwkv", "jamba", "zamba", "falcon-h1", "granitehybrid", "plamo2"]
+        if linear.contains(where: { a.contains($0) }) { return false }
+        let moe = ["moe", "mixtral"]
+        if moe.contains(where: { a.contains($0) }) { return false }
+        return true
+    }
+
+    /// 给界面用的一句话说明（为什么不生效）
+    var kvQuantNote: String? {
+        if !kvQuant { return nil }
+        if kvQuantFellBack { return L("KV 量化启动失败，已自动回退 fp16") }
+        if !Self.kvQuantSupported(architecture: modelInfo?.architecture, name: modelName) {
+            return L("该架构不支持 KV 量化，保持 fp16")
+        }
+        return nil
+    }
+
+    /// 切换 KV 精度：存盘并重启服务
+    func setKVQuant(_ on: Bool) {
+        guard on != kvQuant else { return }
+        kvQuant = on
+        UserDefaults.standard.set(on, forKey: "kvQuant")
+        kvQuantFellBack = false
+        restart()
     }
 
     /// 读当前模型 GGUF 头的架构信息（只读文件头，不碰权重）
@@ -103,7 +163,8 @@ final class ServerController: ObservableObject {
         ContextAdvisor.advise(vramGB: vramGB,
                               modelPath: modelPath,
                               info: modelInfo,
-                              options: ServerController.contextOptions)
+                              options: ServerController.contextOptions,
+                              kvType: activeKVType)
     }
 
     // MARK: - 路径
@@ -180,6 +241,8 @@ final class ServerController: ObservableObject {
 
     func restart() {
         stopSync()
+        suppressQuant = false          // 用户主动重启：重新给量化一次机会
+        kvFallbackTried = false
         state = .stopped
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
             self?.launch()
@@ -191,6 +254,9 @@ final class ServerController: ObservableObject {
         modelPath = path
         UserDefaults.standard.set(path, forKey: "modelPath")
         refreshModelInfo()
+        suppressQuant = false
+        kvFallbackTried = false
+        kvQuantFellBack = false
         restart()
     }
 
@@ -233,6 +299,22 @@ final class ServerController: ObservableObject {
         }
     }
 
+    /// 启动失败统一走这里：如果失败发生在开着 KV 量化的启动里，先自动关量化重试一次，
+    /// 避免"模型不支持 -ctk/-ctv 就永远起不来"。
+    private func startFailed(_ message: String) {
+        if kvQuantActive && !kvFallbackTried {
+            kvFallbackTried = true
+            suppressQuant = true
+            kvQuantFellBack = true
+            appendLog(Lf("KV 量化启动失败，改用 fp16 重试：%@", message) + "\n", reset: false)
+            state = .starting
+            launch()
+            return
+        }
+        state = .failed(message)
+        stopPolling()
+    }
+
     private func launch() {
         guard let icdPath = prepareICD() else {
             state = .failed(L("无法写入 Vulkan 配置"))
@@ -259,6 +341,20 @@ final class ServerController: ObservableObject {
             "--chat-template-kwargs", thinkEnabled ? #"{"enable_thinking":true}"# : #"{"enable_thinking":false}"#
         ]
 
+        // KV 量化：-ctk/-ctv 把 K/V 缓存压到 8 位，-fa on 是它的前置条件
+        let useQuant = kvQuant && !suppressQuant
+            && ServerController.kvQuantSupported(architecture: modelInfo?.architecture, name: modelName)
+        kvQuantActive = useQuant
+        if useQuant {
+            // MDKVFAIL=1：故意传一个非法 KV 类型，用来验证"量化启动失败→自动回退 fp16"这条路径
+            let kvFailTest = ProcessInfo.processInfo.environment["MDKVFAIL"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDKVFAIL")
+            let ctk = kvFailTest ? "esoteric_bogus" : "q8_0"
+            p.arguments! += ["-ctk", ctk, "-ctv", "q8_0", "-fa", "on"]
+        }
+
+        lastArguments = p.arguments ?? []
+
         var env = ProcessInfo.processInfo.environment
         env["VK_ICD_FILENAMES"] = icdPath
         env["VK_DRIVER_FILES"] = icdPath
@@ -279,8 +375,13 @@ final class ServerController: ObservableObject {
         p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
                 guard let self else { return }
+                // 只处理"当前这个进程"的退出：KV 量化失败自动回退时，旧进程的终止回调
+                // 不能把刚拉起的新进程状态一起清掉
+                guard self.process === proc else { return }
                 if case .starting = self.state {
-                    self.state = .failed(Lf("推理进程退出（状态码 %lld）", proc.terminationStatus))
+                    self.startFailed(Lf("推理进程退出（状态码 %lld）", proc.terminationStatus))
+                    // startFailed 已经拉起新进程：轮询和 process 都归它，这里不能动
+                    guard self.process === proc else { return }
                 } else if case .ready = self.state {
                     self.state = .stopped
                 }
@@ -388,8 +489,7 @@ final class ServerController: ObservableObject {
         if case .failed = state { stopPolling(); return }
 
         if let started = startedAt, Date().timeIntervalSince(started) > 300 {
-            state = .failed(L("加载超时（超过 5 分钟）"))
-            stopPolling()
+            startFailed(L("加载超时（超过 5 分钟）"))
             return
         }
 
@@ -397,7 +497,9 @@ final class ServerController: ObservableObject {
             guard let self else { return }
             if alive, self.state.isBusy {
                 self.state = .ready
+                self.kvFallbackTried = false
                 self.stopPolling()
+                self.dumpKVTestIfNeeded()
             }
         }
     }
@@ -432,14 +534,30 @@ final class ServerController: ObservableObject {
         // Vulkan 没能初始化时要明确失败，而不是默默退化成 CPU
         if state.isBusy {
             if log.contains("No devices found") || log.contains("failed to initialize Vulkan") {
-                state = .failed(L("Vulkan 后端没有找到可用显卡。请确认 AMD 显卡驱动正常、未被其他进程独占。"))
-                stopPolling()
+                startFailed(L("Vulkan 后端没有找到可用显卡。请确认 AMD 显卡驱动正常、未被其他进程独占。"))
             }
         }
     }
 
     private func appendLog(_ text: String, reset: Bool) {
         log = reset ? text : log + text
+    }
+
+    /// MDKVTEST=1：就绪后把启动参数和 KV 相关日志落盘，用来核对 -ctk/-ctv 真的传下去、真的生效。
+    private func dumpKVTestIfNeeded() {
+        guard ProcessInfo.processInfo.environment["MDKVTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDKVTEST") else { return }
+        var lines: [String] = []
+        lines.append("kvQuant=YES\(kvQuant ? "" : "NO")  active=\(kvQuantActive)  fellBack=\(kvQuantFellBack)")
+        lines.append("activeKVType=\(activeKVType.label)  arch=\(modelInfo?.architecture ?? "nil")")
+        lines.append("args: " + lastArguments.joined(separator: " "))
+        lines.append("--- log (KV/flash 相关) ---")
+        for l in log.split(separator: "\n") where l.lowercased().contains("kv")
+            || l.lowercased().contains("flash") || l.lowercased().contains("quant") {
+            lines.append(String(l))
+        }
+        try? lines.joined(separator: "\n").write(toFile: "/tmp/qstudio_kv.txt",
+                                                 atomically: true, encoding: .utf8)
     }
 
     var tailLog: String {

@@ -31,16 +31,16 @@ struct ModelSpec: Identifiable, Hashable {
         return URL(string: "\(base)/\(repo)/blob/main/\(file)")
     }
 
-    /// KV 缓存体积（fp16，K + V 两份）
-    func kvCacheGB(context: Int) -> Double {
-        let bytes = 2 * kvLayers * context * kvHeads * headDim * 2
-        return Double(bytes) / 1_073_741_824
+    /// KV 缓存体积（K + V 两份）。q8_0 约是 fp16 的 53%，同样显存能开两倍上下文。
+    func kvCacheGB(context: Int, kvType: GGUFInfo.KVType = .fp16) -> Double {
+        let elements = Double(2 * kvLayers * context * kvHeads * headDim)
+        return elements * kvType.bytesPerElement / 1_073_741_824
     }
 
     /// 估算显存占用：权重 + KV 缓存 + 运行时开销
-    func estimatedVRAMGB(context: Int = 8192) -> Double {
+    func estimatedVRAMGB(context: Int = 8192, kvType: GGUFInfo.KVType = .fp16) -> Double {
         let overhead = 0.6 + sizeGB * 0.05
-        return sizeGB + kvCacheGB(context: context) + overhead
+        return sizeGB + kvCacheGB(context: context, kvType: kvType) + overhead
     }
 
     enum Fit {
@@ -57,8 +57,8 @@ struct ModelSpec: Identifiable, Hashable {
         }
     }
 
-    func fit(vramGB: Double, context: Int = 8192) -> Fit {
-        let need = estimatedVRAMGB(context: context)
+    func fit(vramGB: Double, context: Int = 8192, kvType: GGUFInfo.KVType = .fp16) -> Fit {
+        let need = estimatedVRAMGB(context: context, kvType: kvType)
         if need <= vramGB * 0.75 { return .comfortable }
         if need <= vramGB * 0.95 { return .tight }
         return .over

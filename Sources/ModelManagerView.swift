@@ -12,6 +12,9 @@ struct ModelManagerView: View {
     @State private var tab: Tab = .local
     @State private var localModels: [URL] = []
     @State private var contextSize = 8192
+    /// 估算用的 KV 精度：跟着当前设置走，开了量化就按 q8_0 算，
+    /// 否则会把实际跑得动的模型误标成「超出显存」。
+    @State private var kvType: GGUFInfo.KVType = .fp16
 
     enum Tab: String, CaseIterable, Identifiable {
         case local = "本机模型"
@@ -52,6 +55,7 @@ struct ModelManagerView: View {
         .onAppear {
             localModels = ServerController.discoverModels()
             contextSize = ServerController.shared.contextSize
+            kvType = ServerController.shared.kvQuant ? .q8_0 : .fp16
             if ProcessInfo.processInfo.environment["MDMODELTEST"] == "2"
                 || UserDefaults.standard.string(forKey: "MDModelTab") == "remote" {
                 tab = .remote
@@ -155,7 +159,7 @@ struct ModelManagerView: View {
 
     @ViewBuilder
     private func remoteRow(_ spec: ModelSpec) -> some View {
-        let fit = spec.fit(vramGB: vramGB, context: contextSize)
+        let fit = spec.fit(vramGB: vramGB, context: contextSize, kvType: kvType)
         let installed = ModelCatalog.isInstalled(spec)
 
         VStack(alignment: .leading, spacing: 6) {
@@ -194,8 +198,8 @@ struct ModelManagerView: View {
 
             HStack(spacing: 10) {
                 meta(String(format: "%.2f GB", spec.sizeGB))
-                meta("\(L("估算显存")) \(String(format: "%.1f", spec.estimatedVRAMGB(context: contextSize))) GB")
-                meta("\(L("KV 缓存")) \(String(format: "%.2f", spec.kvCacheGB(context: contextSize))) GB")
+                meta("\(L("估算显存")) \(String(format: "%.1f", spec.estimatedVRAMGB(context: contextSize, kvType: kvType))) GB")
+                meta("\(L("KV 缓存")) \(String(format: "%.2f", spec.kvCacheGB(context: contextSize, kvType: kvType))) GB \(kvType.label)")
                 Spacer()
             }
         }
@@ -221,7 +225,8 @@ struct ModelManagerView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.accent)
             }
-            Text(Lf("显存估算 = 权重文件 + KV 缓存(fp16, ctx %@) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。", "\(contextSize)"))
+            Text(Lf("显存估算 = 权重文件 + KV 缓存(%@) + 运行时开销(0.6 GB + 权重×5%)，按 %@ 上下文计算。只是估算，实际占用随上下文长度浮动。",
+                    kvType.label, "\(contextSize)"))
                 .font(.system(size: 9.5))
                 .foregroundStyle(Palette.subtle.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
