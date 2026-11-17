@@ -61,6 +61,16 @@ T = {
     "身份提示词（固定，不能改）": "Identity prompt (fixed, read-only)",
     "编辑这段对话的角色提示词": "Edit this chat's role prompt",
     "编辑角色提示词…": "Edit role prompt…",
+
+    # 采样参数
+    "采样": "Sampling", "采样参数": "Sampling parameters",
+    "精确": "Precise", "平衡": "Balanced", "发散": "Creative",
+    "高级…": "Advanced…", "恢复默认": "Reset", "应用": "Apply",
+    "温度": "Temperature", "重复惩罚": "Repeat penalty", "最大长度": "Max tokens",
+    "不限": "No limit", "固定种子": "Fix seed", "随机": "Random",
+    "只影响这段对话下一轮开始的生成。温度低更稳、更容易重复；温度高更发散、更容易跑题。":
+        "Applies to subsequent turns of this chat. Lower temperature is steadier but repeats more; higher temperature wanders further.",
+    "调整采样参数：温度、Top-K、重复惩罚等": "Tune sampling: temperature, top-K, repeat penalty",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",
     "清空所有归档？": "Clear all archives?", "删除归档？": "Delete archive?",

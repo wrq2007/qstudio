@@ -150,8 +150,30 @@ final class ChatStore: ObservableObject {
         }
         lines.append("--- 合成后的 system（当前会话）---")
         lines.append(Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt))
+        // 顺手验证 GGUF 里的采样推荐值解析（配合 /tmp/fake_sampling.gguf）
+        if let info = GGUFInspector.read(at: URL(fileURLWithPath: "/tmp/fake_sampling.gguf")) {
+            let sp = info.sampling
+            lines.append("fake gguf: arch=\(info.architecture) layers=\(info.blockCount) kvHeads=\(info.headCountKV) "
+                         + "ctx=\(info.trainedContext) sampling=\(sp.map { "T\($0.temperature)/K\($0.topK)/P\($0.topP)/R\($0.repeatPenalty)" } ?? "nil")")
+        } else {
+            lines.append("fake gguf: 解析失败")
+        }
         try? lines.joined(separator: "\n").write(toFile: "/tmp/qstudio_role.txt",
                                                  atomically: true, encoding: .utf8)
+    }
+
+    /// 改某段对话的采样参数
+    func setSampling(_ p: SamplingParams, for id: UUID?) {
+        guard let id, let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[i].sampling = p
+        scheduleSave()
+    }
+
+    func sampling(for id: UUID?) -> SamplingParams {
+        guard let id, let s = sessions.first(where: { $0.id == id }) else {
+            return SamplingParams.Preset.balanced.params
+        }
+        return s.samplingParams
     }
 
     func rolePrompt(for id: UUID) -> String {
@@ -201,7 +223,10 @@ final class ChatStore: ObservableObject {
         stop()
         // 侧栏选中了某个组时，新对话直接归进去——这样用户先选组再提问，回答完就在该组里
         let group = showUngroupedOnly ? nil : selectedGroupID
-        let s = ChatSession(groupID: group, rolePrompt: instruction)
+        let s = ChatSession(groupID: group,
+                           rolePrompt: instruction,
+                           sampling: ServerController.shared.modelInfo?.sampling
+                                     ?? SamplingParams.Preset.balanced.params)
         sessions.insert(s, at: 0)
         if select {
             currentID = s.id
@@ -457,7 +482,8 @@ final class ChatStore: ObservableObject {
             payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
         }
 
-        run(payload: payload, forceQuestion: false, botID: botID, server: server)
+        run(payload: payload, forceQuestion: false, botID: botID, server: server,
+            sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
     }
 
     /// 挑了一个候选方向
@@ -514,7 +540,8 @@ final class ChatStore: ObservableObject {
             forceQuestion: false,
             responseFormat: ["type": "json_object", "schema": schema],
             botID: botID,
-            server: server)
+            server: server,
+            sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
     }
 
     /// 首轮对话后让模型给这段对话起个短标题（≤14 字）。
@@ -593,14 +620,19 @@ final class ChatStore: ObservableObject {
                      forceQuestion: Bool,
                      responseFormat: [String: Any]? = nil,
                      botID: UUID,
-                     server: ServerController) {
+                     server: ServerController,
+                     sampling: SamplingParams = SamplingParams.Preset.balanced.params) {
         var body: [String: Any] = [
             "messages": payload,
             "stream": true,
-            "temperature": 0.7,
-            "max_tokens": -1,
             "stream_options": ["include_usage": true]
         ]
+        body["temperature"] = sampling.temperature
+        body["top_p"] = sampling.topP
+        body["top_k"] = sampling.topK
+        body["repeat_penalty"] = sampling.repeatPenalty
+        body["max_tokens"] = sampling.maxTokens
+        if sampling.seed >= 0 { body["seed"] = sampling.seed }
         if let responseFormat {
             body["response_format"] = responseFormat
         }
@@ -619,7 +651,25 @@ final class ChatStore: ObservableObject {
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-                let (bytes, response) = try await self.session.bytes(for: req)
+                var (bytes, response) = try await self.session.bytes(for: req)
+                // 采样字段可能不被这个版本的服务端接受（400）：退回只带温度的最小请求再试一次，
+                // 宁可少调参，也不能让用户发不出消息
+                if let http = response as? HTTPURLResponse, http.statusCode == 400 {
+                    var minimal: [String: Any] = [
+                        "messages": payload,
+                        "stream": true,
+                        "temperature": 0.7,
+                        "max_tokens": -1,
+                        "stream_options": ["include_usage": true]
+                    ]
+                    if let responseFormat { minimal["response_format"] = responseFormat }
+                    if forceQuestion {
+                        minimal["tools"] = [ChatStore.askUserTool]
+                        minimal["tool_choice"] = ["type": "function", "function": ["name": "ask_user"]]
+                    }
+                    req.httpBody = try JSONSerialization.data(withJSONObject: minimal)
+                    (bytes, response) = try await self.session.bytes(for: req)
+                }
                 guard let http = response as? HTTPURLResponse else {
                     throw ChatFailure.message(L("服务器没有返回有效响应"))
                 }

@@ -11,6 +11,10 @@ struct GGUFInfo {
     var trainedContext: Int = 0
     var fileSize: Int64 = 0
 
+    /// 文件里写死的采样参数（general.sampling.*）。大部分 GGUF 不带这段，
+    /// 带了就说明作者给了推荐值，优先用它当新对话的默认。
+    var sampling: SamplingParams?
+
     /// 每个 token 的 head 维度
     var headDim: Int {
         if keyLength > 0 { return keyLength }
@@ -97,6 +101,7 @@ enum GGUFInspector {
 
         var arch = ""
         var values: [String: Int] = [:]
+        var floats: [String: Double] = [:]
 
         for i in 0..<kvCount {
             guard let key = cursor.string() else {
@@ -109,6 +114,10 @@ enum GGUFInspector {
             }
             if key == "general.architecture" {
                 arch = cursor.string() ?? ""
+                continue
+            }
+            if key.hasPrefix("general.sampling.") {
+                if let v = cursor.floatValue(type: type) { floats[key] = v }
                 continue
             }
             // 只关心这几个键，其余跳过
@@ -145,6 +154,17 @@ enum GGUFInspector {
             default: break
             }
         }
+        if !floats.isEmpty {
+            // f32 → Double 会带出 0.550000011920929 这种尾巴，取三位小数再进界面
+            func round3(_ x: Double) -> Double { (x * 1000).rounded() / 1000 }
+            var sp = SamplingParams.Preset.balanced.params
+            if let v = floats["general.sampling.temp"] { sp.temperature = round3(v) }
+            if let v = floats["general.sampling.top_p"] { sp.topP = round3(v) }
+            if let v = floats["general.sampling.top_k"], v > 0 { sp.topK = Int(v) }
+            if let v = floats["general.sampling.penalty_repeat"], v > 0 { sp.repeatPenalty = round3(v) }
+            info.sampling = sp
+        }
+
         // 老文件不写 head_count_kv，默认等于 head_count（即 MHA）
         if info.headCountKV == 0 { info.headCountKV = info.headCount }
         guard info.blockCount > 0, info.kvBytesPerToken > 0 else {
@@ -217,6 +237,34 @@ enum GGUFInspector {
                 }
                 return 0
             default:
+                return nil
+            }
+        }
+
+        /// 浮点/整数都当数值读，用来取 general.sampling.*
+        mutating func floatValue(type: UInt32) -> Double? {
+            switch type {
+            case 0, 1, 2, 3, 4, 5, 7, 10, 11:
+                guard let raw = scalar(type: type) else { return nil }
+                return Double(raw)
+            case 6:   // float32
+                guard offset + 4 <= data.count else { return nil }
+                var bits: UInt32 = 0
+                withUnsafeMutableBytes(of: &bits) { dst in
+                    data.copyBytes(to: dst, from: offset..<(offset + 4))
+                }
+                offset += 4
+                return Double(Float(bitPattern: bits.littleEndian))
+            case 12:  // float64
+                guard offset + 8 <= data.count else { return nil }
+                var bits: UInt64 = 0
+                withUnsafeMutableBytes(of: &bits) { dst in
+                    data.copyBytes(to: dst, from: offset..<(offset + 8))
+                }
+                offset += 8
+                return Double(bitPattern: bits.littleEndian)
+            default:
+                _ = skipValue(type: type)
                 return nil
             }
         }

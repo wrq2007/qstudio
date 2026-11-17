@@ -46,6 +46,57 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     }
 }
 
+/// 一段对话用的采样参数。三档预设是给普通用户的，高级面板留给想细调的人。
+struct SamplingParams: Codable, Equatable {
+    var temperature: Double = 0.7
+    var topP: Double = 0.9
+    var topK: Int = 40
+    var repeatPenalty: Double = 1.05
+    /// -1 = 不限制（一直生成到模型自己停）
+    var maxTokens: Int = -1
+    /// -1 = 每次随机（llama.cpp 的约定）
+    var seed: Int = -1
+
+    enum Preset: String, CaseIterable, Identifiable {
+        case precise, balanced, creative
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .precise: return L("精确")
+            case .balanced: return L("平衡")
+            case .creative: return L("发散")
+            }
+        }
+
+        var params: SamplingParams {
+            switch self {
+            case .precise:
+                return SamplingParams(temperature: 0.3, topP: 0.85, topK: 20, repeatPenalty: 1.08,
+                                      maxTokens: -1, seed: -1)
+            case .balanced:
+                return SamplingParams(temperature: 0.7, topP: 0.9, topK: 40, repeatPenalty: 1.05,
+                                      maxTokens: -1, seed: -1)
+            case .creative:
+                return SamplingParams(temperature: 1.0, topP: 0.95, topK: 60, repeatPenalty: 1.0,
+                                      maxTokens: -1, seed: -1)
+            }
+        }
+    }
+
+    /// 和哪一档完全一致（用于高亮）；都不一致时按最接近的算
+    var preset: Preset? {
+        for p in Preset.allCases where p.params == self { return p }
+        return nil
+    }
+
+    /// 一句话描述，显示在工具条上
+    var summary: String {
+        if let p = preset { return p.label }
+        return String(format: "T%.2f", temperature)
+    }
+}
+
 /// 工作组（对话分组/文件夹）。一个对话只属于一个组。
 struct WorkGroup: Identifiable, Codable, Equatable {
     var id: UUID
@@ -69,6 +120,9 @@ struct ChatSession: Identifiable, Codable, Equatable {
     /// 所属工作组；nil = 未分组。旧数据没有这个字段，解码时为 nil。
     var groupID: UUID?
 
+    /// 这段对话的采样参数。旧数据没有这个字段，解码为 nil，按模板默认值处理。
+    var sampling: SamplingParams?
+
     /// 这段对话自己的角色提示词（怎么答）。
     /// 旧数据没有这个字段，解码为 nil，加载时用当时的全局指令快照补齐——
     /// 不能留空，否则老对话的行为会突然变。
@@ -81,7 +135,8 @@ struct ChatSession: Identifiable, Codable, Equatable {
          archived: Bool = false,
          messages: [ChatMessage] = [],
          groupID: UUID? = nil,
-         rolePrompt: String? = nil) {
+         rolePrompt: String? = nil,
+         sampling: SamplingParams? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -90,7 +145,11 @@ struct ChatSession: Identifiable, Codable, Equatable {
         self.messages = messages
         self.groupID = groupID
         self.rolePrompt = rolePrompt
+        self.sampling = sampling
     }
+
+    /// 取生效的采样参数：没设过就用平衡档
+    var samplingParams: SamplingParams { sampling ?? SamplingParams.Preset.balanced.params }
 
     /// 标题的显示形态：默认占位标题「新对话」跟随界面语言，其余是用户/模型生成的原文。
     /// 存储里始终保留中文占位值，标题生成的判断逻辑（title == "新对话"）才不会被语言影响。

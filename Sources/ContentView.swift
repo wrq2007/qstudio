@@ -507,6 +507,11 @@ private struct ChatView: View {
                 .environmentObject(chat)
                 .localized()
         }
+        .sheet(isPresented: $showSampling) {
+            SamplingSheet(sessionID: chat.currentID)
+                .environmentObject(chat)
+                .localized()
+        }
     }
 
     /// 模型文件名往往很长，顶栏只显示掐头去尾的缩写
@@ -916,6 +921,7 @@ private struct ChatView: View {
     // MARK: 输入区
 
     @State private var inputHeight: CGFloat = PlainTextEditor.minHeight
+    @State private var showSampling = false
 
     private var composer: some View {
         VStack(spacing: 8) {
@@ -995,6 +1001,38 @@ private struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .help("调整上下文长度")
+
+                    // 采样参数：三档预设放在菜单里，细调开高级面板
+                    Menu {
+                        ForEach(SamplingParams.Preset.allCases) { preset in
+                            Button {
+                                chat.setSampling(preset.params, for: chat.currentID)
+                            } label: {
+                                let cur = chat.sampling(for: chat.currentID)
+                                Text(cur.preset == preset ? "✓ \(preset.label)" : preset.label)
+                            }
+                        }
+                        Divider()
+                        Button(L("高级…")) { showSampling = true }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 10.5))
+                            Text("\(L("采样")) \(chat.sampling(for: chat.currentID).summary)")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(Palette.text.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(Palette.subtle.opacity(0.08))
+                        )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(L("调整采样参数：温度、Top-K、重复惩罚等"))
 
                     Spacer(minLength: 6)
 
