@@ -678,25 +678,43 @@ private struct ChatView: View {
         let total = server.contextSize
         let ratio = total > 0 ? min(1.0, Double(used) / Double(total)) : 0
 
+        let warn = ratio > 0.7 ? (ratio > 0.9 ? Color(red: 0.85, green: 0.25, blue: 0.25)
+                                              : Color(red: 0.85, green: 0.58, blue: 0.10))
+                               : Palette.accent
+
         return HStack(spacing: 6) {
             ZStack {
                 Circle()
                     .stroke(Palette.subtle.opacity(0.18), lineWidth: 2.5)
                 Circle()
                     .trim(from: 0, to: ratio)
-                    .stroke(ratio > 0.9 ? Color(red: 0.85, green: 0.25, blue: 0.25)
-                                        : Palette.accent,
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(warn, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
             .frame(width: 14, height: 14)
 
             Text("\(kFormat(used)) / \(ctxLabel)")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(Palette.subtle)
+                .foregroundStyle(ratio > 0.7 ? warn : Palette.subtle)
                 .fixedSize()
+
+            // 快到上限时给一句人话，光看数字很多人不会换算
+            if ratio > 0.9 {
+                Text("建议新开话题")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(warn)
+                    .fixedSize()
+            } else if ratio > 0.7 {
+                Text("\(Int(ratio * 100))%")
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(warn)
+                    .fixedSize()
+            }
         }
-        .help(Lf("已占用 %@ / %@ tokens", "\(used)", "\(total)"))
+        .help(ratio > 0.9
+              ? Lf("已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。",
+                   "\(used)", "\(total)", "\(Int(ratio * 100))")
+              : Lf("已占用 %@ / %@ tokens", "\(used)", "\(total)"))
     }
 
     private var contextPickerList: some View {

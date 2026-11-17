@@ -100,6 +100,7 @@
 "已下载" = "Downloaded";
 "已停止" = "Stopped";
 "已占用 %@ / %@ tokens" = "Used %@ / %@ tokens";
+"已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。" = "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated; consider a new chat.";
 "带思维链的推理模型。会先输出一大段思考再给正文，需要把输入框右下角的「深度思考」打开。" = "Chain-of-thought reasoning model. Emits a long reasoning block before the answer — enable Deep Thinking at the bottom right of the input box.";
 "平衡" = "Balanced";
 "应对拖延与专注力管理" = "Procrastination & focus";
@@ -108,6 +109,7 @@
 "建议" = "Suggest";
 "建议 %@K" = "Suggest %@K";
 "建议 %lldK" = "Suggest %lldK";
+"建议新开话题" = "Start a new chat";
 "建议用" = "recommends";
 "开启深度思考，显示推理过程（会重载模型）" = "Enable Deep Thinking to show reasoning (reloads model)";
 "归档" = "Archive";

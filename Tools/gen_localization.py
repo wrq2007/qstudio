@@ -71,6 +71,11 @@ T = {
     "只影响这段对话下一轮开始的生成。温度低更稳、更容易重复；温度高更发散、更容易跑题。":
         "Applies to subsequent turns of this chat. Lower temperature is steadier but repeats more; higher temperature wanders further.",
     "调整采样参数：温度、Top-K、重复惩罚等": "Tune sampling: temperature, top-K, repeat penalty",
+
+    # 上下文用量
+    "建议新开话题": "Start a new chat",
+    "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。":
+        "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated; consider a new chat.",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",
     "清空所有归档？": "Clear all archives?", "删除归档？": "Delete archive?",

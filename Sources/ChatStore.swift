@@ -196,6 +196,30 @@ final class ChatStore: ObservableObject {
         promptTokens + generatedTokens
     }
 
+    /// 服务端没回 usage 时的兜底：把这一轮真正发出去的提示拼起来，走 /tokenize 数一遍。
+    /// 只在这轮结束时调用，不阻塞流式过程。
+    func refreshTokenUsageFallback(server: ServerController) {
+        guard promptTokens == 0, let cur = current else { return }
+        let prompt = ([Self.composeSystem(identity: Self.identityPrompt, role: cur.rolePrompt)]
+                      + cur.messages.filter { !$0.text.isEmpty }.map { $0.text })
+            .joined(separator: "\n")
+        guard !prompt.isEmpty else { return }
+        var req = URLRequest(url: server.baseURL.appendingPathComponent("tokenize"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = 10
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["content": prompt])
+        session.dataTask(with: req) { [weak self] data, _, _ in
+            guard let data,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let toks = obj["tokens"] as? [Any], !toks.isEmpty else { return }
+            DispatchQueue.main.async {
+                guard let self, self.promptTokens == 0 else { return }
+                self.promptTokens = toks.count
+            }
+        }.resume()
+    }
+
     private func indexOfCurrent() -> Int? {
         guard let id = currentID else { return nil }
         return sessions.firstIndex { $0.id == id }
@@ -697,6 +721,7 @@ final class ChatStore: ObservableObject {
                 guard self.generation == myGen else { return }
                 self.flushPending()
                 self.isStreaming = false
+                self.refreshTokenUsageFallback(server: server)
                 self.finishTurn(id: botID, server: server)
                 self.scheduleSave()
             }
@@ -743,7 +768,10 @@ final class ChatStore: ObservableObject {
             if let v = timings["prompt_ms"] as? Double { m.promptMS = v }
             if let v = timings["predicted_per_token_ms"] as? Double { m.perTokenMS = v }
         }
-        // 最后一帧会带 usage，比 timings 更准
+        // 最后一帧会带 usage，必须放在 timings 之后覆盖：
+        // 命中 prompt cache 时 timings.prompt_n 只是「本次新算的」增量（实测 16 个 token 的
+        // 提示在前一轮缓存后只报 4），而 usage.prompt_tokens 始终是完整提示。
+        // 上下文占用要用完整值，否则每轮都显得很空。
         if let usage = obj["usage"] as? [String: Any] {
             if let v = usage["prompt_tokens"] as? Int, v > 0 { m.promptTokens = v }
             if let v = usage["completion_tokens"] as? Int, v > 0 { m.generatedTokens = v }
