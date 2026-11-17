@@ -25,6 +25,12 @@ struct ModelSpec: Identifiable, Hashable {
     var localName: String { "\(displayName)-\(quant).gguf" }
     var sizeGB: Double { Double(sizeBytes) / 1_073_741_824 }
 
+    /// 浏览器打开的模型文件页（默认走 hf-mirror，与镜像策略一致）
+    var pageURL: URL? {
+        let base = ModelCatalog.mirrors.first ?? "https://hf-mirror.com"
+        return URL(string: "\(base)/\(repo)/blob/main/\(file)")
+    }
+
     /// KV 缓存体积（fp16，K + V 两份）
     func kvCacheGB(context: Int) -> Double {
         let bytes = 2 * kvLayers * context * kvHeads * headDim * 2
