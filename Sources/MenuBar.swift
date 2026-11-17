@@ -27,12 +27,21 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private static func icon() -> NSImage? {
+        // 两档都挂到同一个 NSImage 上：只读 1x 那张的话，视网膜屏只能把 18px 拉成 36px，
+        // 图标会发虚（之前就是这样）。每档 rep 都声明为 18pt，系统按像素比自己挑。
+        let img = NSImage(size: NSSize(width: 18, height: 18))
+        var added = 0
         for name in ["MenuIcon", "MenuIcon@2x"] {
-            if let url = Bundle.main.url(forResource: name, withExtension: "png"),
-               let img = NSImage(contentsOf: url) {
-                img.size = NSSize(width: 18, height: 18)
-                return img
-            }
+            guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
+                  let data = try? Data(contentsOf: url),
+                  let rep = NSBitmapImageRep(data: data) else { continue }
+            rep.size = NSSize(width: 18, height: 18)
+            img.addRepresentation(rep)
+            added += 1
+        }
+        if added > 0 {
+            img.isTemplate = true         // 模板图：系统按菜单栏深浅色自动反色
+            return img
         }
         // 资源缺失时退回 SF Symbol，保证菜单栏永远有个能点的图标
         return NSImage(systemSymbolName: "bubble.left.and.bubble.right", accessibilityDescription: "Q Studio")
