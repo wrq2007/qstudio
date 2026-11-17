@@ -176,6 +176,20 @@ App 启动时会自动扫描以下三个目录**顶层的 `.gguf` 文件**（不
 - **归档**：对话右键归档，归档内容在「设置 → 归档的对话」里管理和恢复。
 - **标题**：首轮对话后由模型自动生成短标题，失败时回退为第一条消息截断。
 
+## 界面预览
+
+**对话界面** —— 流式输出、Markdown 渲染、SVG 示意图、消息级性能指标：
+
+![Q Studio 对话界面](Assets/Screenshots/01-chat.png)
+
+**设置 · 通用** —— 界面语言、系统提示词、上下文长度：
+
+![Q Studio 通用设置](Assets/Screenshots/02-settings-general.png)
+
+**设置 · 归档对话** —— 归档管理与搜索：
+
+![Q Studio 归档管理](Assets/Screenshots/03-settings-archives.png)
+
 ---
 
 <a id="english"></a>
@@ -352,3 +366,17 @@ Other Intel platforms (integrated GPUs, NVIDIA cards with 1401) work in theory b
 - **Deep Thinking**: toggle at the bottom right of the input box controls whether the model emits chain-of-thought (reloads the model).
 - **Archive**: right-click a chat to archive; manage and restore under Settings → Archived chats.
 - **Titles**: a short title is generated after the first exchange, falling back to a truncated first message on failure.
+
+## Screenshots
+
+**Chat** — streaming output, Markdown, SVG rendering, per-message performance metrics:
+
+![Q Studio chat](Assets/Screenshots/01-chat.png)
+
+**Settings · General** — interface language, system prompt, context length:
+
+![Q Studio general settings](Assets/Screenshots/02-settings-general.png)
+
+**Settings · Archives** — archived chats with search:
+
+![Q Studio archives](Assets/Screenshots/03-settings-archives.png)
