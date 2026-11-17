@@ -28,7 +28,9 @@ struct PlainTextEditor: NSViewRepresentable {
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
-        scroll.hasVerticalScroller = true
+        // 滚动条只在该出现的时候出现：overlay 样式的空轨道会在输入框右侧
+        // 留一个灰竖条（内容只有一行时也一样），看着像多余的控件。
+        scroll.hasVerticalScroller = false
         scroll.hasHorizontalScroller = false
         scroll.scrollerStyle = .overlay
 
@@ -94,6 +96,7 @@ struct PlainTextEditor: NSViewRepresentable {
         // 这里若再写一遍 !text.isEmpty，会在 SwiftUI 刷新时把组合中的占位符错误地显示回来
         if let tv = context.coordinator.textView {
             context.coordinator.placeholder?.isHidden = !tv.string.isEmpty || tv.markedRange().length > 0
+            context.coordinator.updateScroller(tv)
         }
 
         // 只在焦点状态从 false 变 true 的那一刻抢焦点，
@@ -155,6 +158,23 @@ struct PlainTextEditor: NSViewRepresentable {
             let used = layout.usedRect(for: container)
             let h = used.height + PlainTextEditor.topInset * 2
             parent.onHeightChange(min(max(h, PlainTextEditor.minHeight), PlainTextEditor.maxHeight))
+            updateScroller(tv, contentHeight: h)
+        }
+
+        /// 内容超过高度上限（需要滚）才挂滚动条。
+        /// 反过来关掉是因为 NSScrollView 的 overlay 滚动条即使不滚动也会画一段空轨道，
+        /// 位置正好压在输入框右侧，看起来像个来路不明的灰条。
+        func updateScroller(_ tv: NSTextView, contentHeight: CGFloat? = nil) {
+            guard let scroll = tv.enclosingScrollView else { return }
+            var h = contentHeight
+            if h == nil, let layout = tv.layoutManager, let container = tv.textContainer {
+                layout.ensureLayout(for: container)
+                h = layout.usedRect(for: container).height + PlainTextEditor.topInset * 2
+            }
+            let overflow = (h ?? 0) > PlainTextEditor.maxHeight + 0.5
+            if scroll.hasVerticalScroller != overflow {
+                scroll.hasVerticalScroller = overflow
+            }
         }
     }
 }

@@ -463,8 +463,20 @@ final class ChatStore: ObservableObject {
         guard id != currentID else { return }
         if isStreaming { stop() }
         currentID = id
-        promptTokens = 0
-        generatedTokens = 0
+        seedUsageFromHistory()
+    }
+
+    /// 切到一段已有内容的对话时，占用接着上一轮的真实数字显示。
+    /// 不清零再等新请求：否则一条有 8 条消息的对话会显示「0 / 16K」，
+    /// 看着像上下文是空的，用户没法判断还剩多少空间。
+    private func seedUsageFromHistory() {
+        let last = current?.messages.last { $0.promptTokens > 0 || $0.generatedTokens > 0 }
+        promptTokens = last?.promptTokens ?? 0
+        generatedTokens = last?.generatedTokens ?? 0
+        // 老对话没记过 usage：用本地 /tokenize 估一遍，总比一直显示 0 强
+        if promptTokens == 0, !messages.isEmpty {
+            refreshTokenUsageFallback(server: ServerController.shared)
+        }
     }
 
     // MARK: - 工作组
@@ -609,6 +621,8 @@ final class ChatStore: ObservableObject {
             }
             sessions = list
             currentID = list.first?.id
+            // 重启后接着显示上一轮的占用，不用等再发一条消息才有数字
+            seedUsageFromHistory()
             if migrated > 0 { scheduleSave() }
         } catch {
             // 防呆：解码失败不静默清空——先把损坏原件隔离保存，用户有机会找回来

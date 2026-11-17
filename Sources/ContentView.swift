@@ -413,6 +413,18 @@ private struct ChatView: View {
             if instTest {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { showSettings = true }
             }
+            if ProcessInfo.processInfo.environment["MDCOMPOSERTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDCOMPOSERTEST") {
+                // 自检开关：预置输入框内容与一个待发附件，用于截图核对输入区
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    input = "/"
+                    attachments = [
+                        MessageAttachment(name: "野外点位记录.md",
+                                          text: String(repeating: "点位 A：北纬 34.2，灰岩。" + "\n", count: 60),
+                                          originalChars: 1761, truncated: true)
+                    ]
+                }
+            }
             if ProcessInfo.processInfo.environment["MDASKTEST"] == "1" {
                 // 等服务就绪后让模型反问一次，验证问题卡片
                 var tries = 0
