@@ -8,6 +8,7 @@ dmgstage/
 
 # 内部开发记录，不是项目文档
 HANDOFF.md
+HANDOFF_CURRENT.md
 
 # 编译好的工具二进制（保留源码 Tools/winid/main.swift）
 Tools/winid/winid
