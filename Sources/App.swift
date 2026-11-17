@@ -104,6 +104,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ChatStore.shared.selfTestCompact(server: ServerController.shared)
             }
         }
+        if ProcessInfo.processInfo.environment["MDATTACHTEST"] == "1"
+            || UserDefaults.standard.bool(forKey: "MDATTACHTEST") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+                ChatStore.shared.selfTestAttach(server: ServerController.shared)
+            }
+        }
     }
 
     /// 被 kill / 注销 / 终端信号打断时也要回收推理子进程，否则它会变成孤儿一直占着显存。

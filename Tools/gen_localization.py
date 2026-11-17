@@ -108,6 +108,21 @@ T = {
     "复制摘要": "Copy summary",
     "收起": "Hide", "展开": "Show",
     "输入 / 查看命令": "Type / for commands",
+
+    # 附件（文本文件）
+    "附加": "Attach",
+    "附加文本文件（也可以直接把文件拖进来）": "Attach a text file (or just drag one in)",
+    "选择要附加的文本文件（代码、Markdown、CSV、JSON、日志等）":
+        "Choose text files to attach (code, Markdown, CSV, JSON, logs…)",
+    "移除这个附件": "Remove this attachment",
+    "已截断": "Truncated",
+    "文件读取失败": "could not read the file",
+    "文件太大（约 %@ MB），单个文件上限 8 MB": "File is too large (~%@ MB). The limit is 8 MB per file",
+    "%@ 看起来不是文本文件，读不出文字": "%@ doesn't look like a text file — no text to extract",
+    "%@ 里没有可用的文字": "%@ contains no usable text",
+    "读不了 %@：%@": "Couldn't read %@: %@",
+    "%lld 字": "%lld chars",
+    "\n\n…（中间省略 %lld 字）…\n\n": "\n\n… (%lld chars omitted) …\n\n",
     "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话或输入 /compact 压缩。":
         "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated. Start a new chat or type /compact to compact.",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",

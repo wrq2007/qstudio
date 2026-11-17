@@ -55,8 +55,10 @@ enum ContextCompactor {
     /// 并把这个事实写进记录——模型才知道"前面还有内容，只是看不到了"。
     static func transcript(_ messages: [ChatMessage], charBudget: Int) -> String {
         var lines: [String] = []
-        for m in messages where !m.text.isEmpty && !m.isChoice {
-            var body = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for m in messages where !m.isChoice {
+            let content = m.fullContent
+            guard !content.isEmpty else { continue }
+            var body = content.trimmingCharacters(in: .whitespacesAndNewlines)
             if body.count > perMessageLimit {
                 let head = String(body.prefix(perMessageLimit * 2 / 3))
                 let tail = String(body.suffix(perMessageLimit / 3))
@@ -147,8 +149,10 @@ enum ContextCompactor {
     static func localDigest(_ messages: [ChatMessage], limit: Int = 1400) -> String {
         var out: [String] = ["（本地摘要：模型摘要失败，以下为各轮要点摘录）"]
         var used = out[0].count
-        for m in messages where !m.text.isEmpty && !m.isChoice {
-            let firstLine = m.text.split(separator: "\n").first.map(String.init) ?? m.text
+        for m in messages where !m.isChoice {
+            let content = m.fullContent
+            guard !content.isEmpty else { continue }
+            let firstLine = content.split(separator: "\n").first.map(String.init) ?? content
             var s = firstLine.trimmingCharacters(in: .whitespaces)
             if s.count > 120 { s = String(s.prefix(120)) + "…" }
             let line = (m.role == .user ? "· 用户：" : "· 助手：") + s

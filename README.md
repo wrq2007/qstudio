@@ -171,6 +171,7 @@ Q Studio **不在应用内下载模型**。打开「模型管理 → 获取模�
 - **公式渲染**：`$$…$$`、`\[…\]` 和整行 `$…$` 用内置 KaTeX 渲染（资源打包进 app，不联网）；夹在句子中间的 `$…$` 仍按原文显示。
 - **KV 缓存量化**：默认开 q8_0，长上下文下省一半 KV 显存；启动失败自动回退 fp16，显存估算同步按实际精度计算。
 - **上下文压缩（`/compact`）**：在输入框输入 `/compact`（或点顶栏「更多 → 压缩上下文」），把早前的对话交给模型压成一份摘要，最近两轮原文保持不变；压缩后上下文占用立刻重算，摘要卡片可展开看全文。模型不可用时退到本地摘录，不会卡住。
+- **附件（文本文件）**：点输入框左侧的回形针、或把文件直接拖进输入框，支持 txt/md/csv/tsv/json/yaml/xml/log 以及各种源码（py/swift/js/go…）；按上下文预算自动截断（保留头 75% + 尾 25%），二进制和超过 8 MB 的文件会直接拒绝并说明原因。当前模型没有视觉能力，图片和扫描版 PDF 读不了。
 - **菜单栏**：常驻菜单栏图标，点开可切最近 5 个对话；关窗口不退出，推理服务继续保留。
 - **归档**：对话右键归档，归档内容在「设置 → 归档的对话」里管理和恢复。
 - **标题**：首轮对话后由模型自动生成短标题，失败时回退为第一条消息截断。
@@ -362,6 +363,7 @@ Other Intel platforms (integrated GPUs, NVIDIA cards with 1401) work in theory b
 - **Math rendering**: `$$…$$`, `\[…\]` and whole-line `$…$` render through bundled KaTeX (fully offline); `$…$` embedded mid-sentence stays literal for now.
 - **KV cache quantization**: q8_0 by default — halves KV memory at long context. Falls back to fp16 automatically if the model cannot start, and VRAM estimates follow the precision actually in use.
 - **Context compaction (`/compact`)**: type `/compact` in the composer (or use More → Compact context) to have the model summarize earlier turns into one digest while keeping the last two rounds verbatim. Token usage is recounted immediately and the summary card expands to the full text. If the model is unavailable it falls back to a local digest instead of blocking.
+- **Attachments (text files)**: click the paperclip on the left of the composer or drop a file into it — txt/md/csv/tsv/json/yaml/xml/log plus source files (py/swift/js/go…). Content is truncated to the context budget from both ends (75% head + 25% tail); binaries and files over 8 MB are rejected with an explanation. The current model has no vision, so images and scanned PDFs are out of scope.
 - **Menu bar**: a status bar icon lists the 5 most recent chats; closing the window no longer quits, so the inference service keeps running.
 - **Archive**: right-click a chat to archive; manage and restore under Settings → Archived chats.
 - **Titles**: a short title is generated after the first exchange, falling back to a truncated first message on failure.

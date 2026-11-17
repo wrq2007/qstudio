@@ -1,5 +1,26 @@
 import Foundation
 
+/// 一条消息带上来的附件。本地模型吃不了文件，能做的只有"把正文抽成文本塞进上下文"。
+/// 文本存进会话文件，重开 app 还能看见当时发了什么。
+struct MessageAttachment: Identifiable, Equatable, Codable {
+    var id: UUID
+    var name: String
+    /// 抽取出来的正文（可能已被截断）
+    var text: String
+    /// 原文总字符数（截断前）
+    var originalChars: Int
+    /// 因为超预算被截断了
+    var truncated: Bool
+
+    init(id: UUID = UUID(), name: String, text: String, originalChars: Int, truncated: Bool) {
+        self.id = id
+        self.name = name
+        self.text = text
+        self.originalChars = originalChars
+        self.truncated = truncated
+    }
+}
+
 struct ChatMessage: Identifiable, Equatable, Codable {
     enum Role: String, Codable, Equatable { case user, assistant }
 
@@ -18,6 +39,9 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     /// 这张摘要顶替了多少条消息（只用于显示）
     var summaryCount: Int?
 
+    /// 这条消息带的附件（文本/PDF 抽出来的正文）
+    var attachments: [MessageAttachment]?
+
     // 推理指标（每条消息独立，避免串台）
     var promptTokens: Int = 0       // 输入 token 数
     var generatedTokens: Int = 0    // 输出 token 数
@@ -34,6 +58,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
          isChoice: Bool = false,
          isSummary: Bool? = nil,
          summaryCount: Int? = nil,
+         attachments: [MessageAttachment]? = nil,
          promptTokens: Int = 0,
          generatedTokens: Int = 0,
          promptTPS: Double = 0,
@@ -48,6 +73,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         self.isChoice = isChoice
         self.isSummary = isSummary
         self.summaryCount = summaryCount
+        self.attachments = attachments
         self.promptTokens = promptTokens
         self.generatedTokens = generatedTokens
         self.promptTPS = promptTPS
@@ -57,6 +83,20 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 
     /// 摘要卡片的判定（可选字段的方便写法）
     var isSummaryBubble: Bool { isSummary == true }
+
+    var hasAttachments: Bool { !(attachments ?? []).isEmpty }
+
+    /// 真正发给模型的正文：附件内容在前，用户问题在后。
+    /// 只贴文件不打字的消息也不会被当成空消息丢掉。
+    var fullContent: String {
+        var parts: [String] = []
+        for a in attachments ?? [] {
+            parts.append("【附件：\(a.name)\(a.truncated ? "（已截断）" : "")】\n" + a.text)
+        }
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { parts.append(t) }
+        return parts.joined(separator: "\n\n")
+    }
 }
 
 /// 一段对话用的采样参数。三档预设是给普通用户的，高级面板留给想细调的人。

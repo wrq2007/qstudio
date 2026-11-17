@@ -288,6 +288,10 @@ private struct ChatView: View {
     @State private var otherText: String = ""
     @State private var showOtherInput = false
 
+    /// 待发送的附件：发出去之后清空，正文已经存进那条消息里
+    @State private var attachments: [MessageAttachment] = []
+    @State private var dropTargeted = false
+
     /// "其他/补充/other"这类选项不直接提交，而是展开输入框让用户自己填
     private func isOtherOption(_ s: String) -> Bool {
         let l = s.lowercased()
@@ -1015,6 +1019,8 @@ private struct ChatView: View {
             slashPanel
 
             VStack(alignment: .leading, spacing: 8) {
+                if !attachments.isEmpty { attachmentChips }
+
                 PlainTextEditor(
                     text: $input,
                     focused: $inputFocused,
@@ -1030,6 +1036,15 @@ private struct ChatView: View {
 
                 // 工具条：跟 WorkBuddy 一个思路，上下文调节就放这儿，不藏菜单
                 HStack(spacing: 10) {
+                    Button {
+                        pickFiles()
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 11.5))
+                    }
+                    .buttonStyle(ToolButtonStyle())
+                    .help(L("附加文本文件（也可以直接把文件拖进来）"))
+
                     Button {
                         showModelPicker = true
                     } label: {
@@ -1153,6 +1168,12 @@ private struct ChatView: View {
             .padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 12).fill(Palette.card))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.border))
+            // 拖拽目标：整个输入卡片都算，拖进来时描边变蓝
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(dropTargeted ? Palette.accent : Color.clear, lineWidth: 1.5)
+            )
+            .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted) { handleDrop($0) }
 
             HStack(spacing: 6) {
                 Text("全部计算在本机完成，不联网")
@@ -1274,18 +1295,117 @@ private struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
     }
 
     private func send() {
         let text = input
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let files = attachments
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty else { return }
         input = ""
-        chat.send(text, server: server)
+        attachments = []
+        chat.send(text, attachments: files, server: server)
         // 发送后把焦点交还输入框：点发送按钮会让它失焦，而 @FocusState 没绑到具体视图
         // 不会自己变，导致之后打字打不进去。false→true 才能触发 updateNSView 重新抢焦点。
         inputFocused = false
         DispatchQueue.main.async { inputFocused = true }
+    }
+
+    // MARK: - 附件
+
+    /// 选文件：面板只列文本类，但允许"其他"，因为不少代码文件没有标准 UTI
+    private func pickFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = AttachmentLoader.allowedContentTypes
+        panel.allowsOtherFileTypes = true
+        panel.message = L("选择要附加的文本文件（代码、Markdown、CSV、JSON、日志等）")
+        panel.prompt = L("附加")
+        guard panel.runModal() == .OK else { return }
+        addFiles(panel.urls)
+    }
+
+    private func addFiles(_ urls: [URL]) {
+        var errors: [String] = []
+        for url in urls {
+            // 已经贴过的同一个文件不再重复加
+            if attachments.contains(where: { $0.name == url.lastPathComponent }) { continue }
+            let used = attachments.reduce(0) { $0 + $1.text.count }
+            let limit = AttachmentLoader.charLimit(contextSize: server.contextSize, existing: used)
+            switch AttachmentLoader.load(url: url, charLimit: limit) {
+            case .success(let a): attachments.append(a)
+            case .failure(let e): errors.append(e.message)
+            }
+        }
+        if !errors.isEmpty { chat.postNote(errors.joined(separator: "；")) }
+        if !urls.isEmpty { inputFocused = true }
+    }
+
+    /// 拖进输入框的文件：只认文件 URL，别的一概不管
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for p in providers where p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            handled = true
+            p.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                var url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let u = item as? URL {
+                    url = u
+                }
+                guard let url else { return }
+                DispatchQueue.main.async { addFiles([url]) }
+            }
+        }
+        return handled
+    }
+
+    /// 已附加文件的小卡片：文件名 + 字数，超预算的标出来
+    private var attachmentChips: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(attachments) { a in
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.accent)
+                    Text(a.name)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.text)
+                        .lineLimit(1)
+                    Text(Lf("%lld 字", a.text.count))
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(Palette.subtle)
+                    if a.truncated {
+                        Text("已截断")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.orange)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.orange.opacity(0.12))
+                            )
+                    }
+                    Spacer(minLength: 4)
+                    Button {
+                        attachments.removeAll { $0.id == a.id }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8.5, weight: .medium))
+                            .foregroundStyle(Palette.subtle)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("移除这个附件"))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Palette.subtle.opacity(0.07))
+                )
+            }
+        }
     }}
 
 // MARK: - 滚动位置偏好键
@@ -1321,7 +1441,41 @@ private struct MessageRow: View {
     /// 单行短消息要让气泡贴合文字；多行/含代码表格的交给 560 上限换行
     private var isShortBubble: Bool {
         let t = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 带附件的消息一律按长气泡排：文件名那一行要先占满宽度才好读
+        if message.hasAttachments { return false }
         return !t.contains("\n") && !t.contains("```") && !t.contains("|") && !t.contains("<svg") && t.count < 80
+    }
+
+    /// 气泡里的附件：只显示文件名和字数，正文已经在上下文里了，不再铺一遍
+    private var bubbleAttachments: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(message.attachments ?? []) { a in
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 9.5))
+                    Text(a.name)
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                    Text(Lf("%lld 字", a.text.count))
+                        .font(.system(size: 9.5))
+                        .opacity(0.7)
+                    if a.truncated {
+                        Text("已截断")
+                            .font(.system(size: 8.5))
+                            .opacity(0.85)
+                    }
+                }
+                .foregroundStyle(message.role == .user ? Color.white : Palette.text)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(message.role == .user
+                              ? Color.white.opacity(0.16)
+                              : Palette.subtle.opacity(0.09))
+                )
+            }
+        }
     }
 
     var body: some View {
@@ -1338,6 +1492,8 @@ private struct MessageRow: View {
             if message.role == .user { Spacer(minLength: 70) }
 
             VStack(alignment: .leading, spacing: 7) {
+                if message.hasAttachments { bubbleAttachments }
+
                 if !message.reasoning.isEmpty {
                     DisclosureGroup("思考过程") {
                         Text(message.reasoning)
@@ -1351,9 +1507,7 @@ private struct MessageRow: View {
                     .foregroundStyle(Palette.subtle)
                 }
 
-                if message.text.isEmpty && streaming {
-                    TypingDots()
-                } else {
+                if !message.text.isEmpty {
                     MarkdownView(
                         source: message.text + (streaming ? " ▍" : ""),
                         baseSize: 13.5,
@@ -1361,6 +1515,8 @@ private struct MessageRow: View {
                         accentText: message.role == .user,
                         fillsWidth: false
                     )
+                } else if streaming {
+                    TypingDots()
                 }
 
                 if !streaming { metricsBar(message) }

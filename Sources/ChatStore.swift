@@ -84,6 +84,9 @@ final class ChatStore: ObservableObject {
 
     func dismissCommandNote() { commandNote = nil }
 
+    /// 给界面用的公开入口（附件读取失败之类，复用同一条提示位）
+    func postNote(_ text: String) { note(text) }
+
     private func note(_ text: String) {
         commandNote = text
         noteWorkItem?.cancel()
@@ -107,7 +110,7 @@ final class ChatStore: ObservableObject {
         var kept = 0
         while i >= 0 && kept < Self.compactKeepMessages {
             let m = messages[i]
-            if !m.text.isEmpty && !m.isChoice && !m.failed { kept += 1 }
+            if !m.fullContent.isEmpty && !m.isChoice && !m.failed { kept += 1 }
             i -= 1
         }
         var start = min(i + 1, messages.count - 1)
@@ -115,7 +118,7 @@ final class ChatStore: ObservableObject {
         while start > 0 && messages[start].role == .assistant { start -= 1 }
         guard start > 0 else { return nil }
         let prefix = Array(messages[0..<start])
-        guard prefix.contains(where: { !$0.text.isEmpty && !$0.isChoice }) else { return nil }
+        guard prefix.contains(where: { !$0.fullContent.isEmpty && !$0.isChoice }) else { return nil }
         return (prefix, start)
     }
 
@@ -395,6 +398,26 @@ final class ChatStore: ObservableObject {
         scheduleSave()
     }
 
+    /// 按消息 id 改消息。流式回调可能晚于用户切走/删掉对话，
+    /// 这时"当前会话"已经不是它所属的那个了——按 id 找，找不到就什么都不做。
+    private func updateMessage(_ id: UUID, _ body: (inout ChatMessage) -> Void) {
+        for si in sessions.indices {
+            guard let mi = sessions[si].messages.firstIndex(where: { $0.id == id }) else { continue }
+            body(&sessions[si].messages[mi])
+            sessions[si].updatedAt = Date()
+            scheduleSave()
+            return
+        }
+    }
+
+    /// 按 id 改某个会话（异步回调回来时用户可能已经切走）
+    private func mutateSession(_ id: UUID, _ body: (inout ChatSession) -> Void) {
+        guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
+        body(&sessions[idx])
+        sessions[idx].updatedAt = Date()
+        scheduleSave()
+    }
+
     // MARK: - 会话操作
 
     /// 当前已经在一条空的新对话上时，不再允许再新建
@@ -636,9 +659,9 @@ final class ChatStore: ObservableObject {
 
     // MARK: - 对话
 
-    func send(_ raw: String, server: ServerController) {
+    func send(_ raw: String, attachments: [MessageAttachment] = [], server: ServerController) {
         let input = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !input.isEmpty else { return }
+        guard !input.isEmpty || !attachments.isEmpty else { return }
         // 斜杠命令不发模型：它改的是本地状态，不该进对话历史
         if let cmd = SlashCommand.parse(input) {
             run(command: cmd, server: server)
@@ -667,7 +690,9 @@ final class ChatStore: ObservableObject {
             // 覆盖「打开app→点组→直接打字发送」这条路径——此时不会走 newSession，
             // 用户的对话若不归组，组里就看不到。
             let isFirstMessage = s.messages.isEmpty
-            s.messages.append(ChatMessage(role: .user, text: input))
+            var user = ChatMessage(role: .user, text: input)
+            if !attachments.isEmpty { user.attachments = attachments }
+            s.messages.append(user)
             s.messages.append(ChatMessage(id: botID, role: .assistant))
             s.refreshTitle()
             if isFirstMessage {
@@ -675,7 +700,8 @@ final class ChatStore: ObservableObject {
             }
         }
         // 标题等主对话 finishTurn 完成后再生成（那时模型空闲，请求不会被排队饿死）
-        lastUserText = input
+        // 只贴文件没打字时，用文件名当标题线索，否则会一直叫"新对话"
+        lastUserText = input.isEmpty ? (attachments.first?.name ?? "") : input
         isStreaming = true
         generatedTokens = 0
 
@@ -706,13 +732,16 @@ final class ChatStore: ObservableObject {
         var system = Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt)
         var summaryParts: [String] = []
         var history: [[String: String]] = []
-        for m in messages where m.id != excludedID && !m.failed && !m.text.isEmpty {
+        for m in messages where m.id != excludedID && !m.failed {
             if m.isSummaryBubble {
                 summaryParts.append(m.text)
                 continue
             }
             if m.isChoice && !includeChoice { continue }
-            history.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
+            // fullContent：附件正文拼在用户问题前面，附件单独发出的消息也能进历史
+            let content = m.fullContent
+            guard !content.isEmpty else { continue }
+            history.append(["role": m.role == .user ? "user" : "assistant", "content": content])
         }
         for s in summaryParts {
             system += "\n\n（以下是本次对话早前部分的压缩摘要，原文已移除）\n" + s
@@ -825,6 +854,86 @@ final class ChatStore: ObservableObject {
 
     func message(_ id: UUID) -> ChatMessage? {
         messages.first { $0.id == id }
+    }
+
+    /// MDATTACHTEST=1：附件读取 + 端到端发送自检。
+    /// 造三个临时文件（正常 md / 二进制 / GB18030），核对读取结果，
+    /// 再真的带附件问一次模型，确认正文确实进了上下文。
+    func selfTestAttach(server: ServerController) {
+        guard ProcessInfo.processInfo.environment["MDATTACHTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDATTACHTEST") else { return }
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("qstudio_attach")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let lines = (1...80).map { "第\($0)行：岩芯编录数据，层位 \($0 * 10) 米。" }
+        let md = lines.joined(separator: "\n") + "\n项目代号：玄武-7。\n结论见附录 A。"
+        let mdURL = dir.appendingPathComponent("岩芯记录.md")
+        try? md.write(to: mdURL, atomically: true, encoding: .utf8)
+
+        let binURL = dir.appendingPathComponent("假二进制.bin")
+        var bin = Data([0x00, 0x01, 0x02, 0x03])
+        bin.append(contentsOf: [UInt8](repeating: 0x00, count: 200))
+        try? bin.write(to: binURL)
+
+        let gbURL = dir.appendingPathComponent("gb.txt")
+        let gbEnc = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+        try? "点位编号：龙门-3。\n岩性：片麻岩。".data(using: gbEnc)?.write(to: gbURL)
+
+        var lines2: [String] = ["--- 读取 ---"]
+        func describe(_ label: String, _ r: Result<MessageAttachment, AttachmentLoader.LoadError>) {
+            switch r {
+            case .success(let a):
+                lines2.append("\(label)：成功 name=\(a.name) 原文=\(a.originalChars)字 存下=\(a.text.count)字 截断=\(a.truncated)")
+                lines2.append("  含代号=\(a.text.contains("玄武-7")) 含结尾=\(a.text.contains("附录 A")) 含省略标记=\(a.text.contains("中间省略"))")
+                lines2.append("  开头：\(a.text.prefix(40).replacingOccurrences(of: "\n", with: "⏎"))")
+            case .failure(let e):
+                lines2.append("\(label)：失败 —— \(e.message)")
+            }
+        }
+        let small = AttachmentLoader.load(url: mdURL, charLimit: 400)
+        describe("md(limit 400)", small)
+        describe("二进制", AttachmentLoader.load(url: binURL, charLimit: 4000))
+        describe("GB18030", AttachmentLoader.load(url: gbURL, charLimit: 4000))
+        lines2.append("上限：字符串长度 \(AttachmentLoader.charLimit(contextSize: 16384))")
+
+        let sid = newSession(select: true)
+        let attachment = (try? small.get()) ?? MessageAttachment(name: mdURL.lastPathComponent,
+                                                                text: md,
+                                                                originalChars: md.count,
+                                                                truncated: false)
+        send("这个文件的「项目代号」是什么？只回答代号，不要解释。",
+             attachments: [attachment], server: server)
+
+        var waited = 0
+        var settled = 0
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            waited += 1
+            if self.isStreaming && waited <= 150 { return }
+            settled += 1
+            guard settled >= 2 || waited > 150 else { return }
+            t.invalidate()
+
+            let cur = self.sessions.first { $0.id == sid }
+            let user = cur?.messages.first { $0.role == .user }
+            let reply = cur?.messages.last { $0.role == .assistant && !$0.text.isEmpty }
+            lines2.append("--- 端到端 ---")
+            lines2.append("用户消息带附件：\(user?.attachments?.count ?? 0) 个；text 为空=\(user?.text.isEmpty ?? true)")
+            lines2.append("fullContent 前缀：\((user?.fullContent ?? "").prefix(120).replacingOccurrences(of: "\n", with: "⏎"))")
+            lines2.append("payload 条数：\(self.buildPayload().count)")
+            if let p = self.buildPayload().first(where: { $0["role"] == "user" }) {
+                lines2.append("payload 里 user 段长度：\((p["content"] ?? "").count) 字；含代号=\((p["content"] ?? "").contains("玄武-7"))")
+            }
+            lines2.append("模型回答：\(reply?.text.replacingOccurrences(of: "\n", with: " ").prefix(200) ?? "（无）")")
+            lines2.append("回答里含 玄武-7：\((reply?.text ?? "").contains("玄武-7"))")
+
+            try? lines2.joined(separator: "\n").write(toFile: "/tmp/qstudio_attach.txt",
+                                                     atomically: true, encoding: .utf8)
+            try? FileManager.default.removeItem(at: dir)
+            self.delete(sid)
+            UserDefaults.standard.removeObject(forKey: "MDATTACHTEST")
+        }
     }
 
     /// MDCOMPACTTEST=1：在临时会话里跑一遍 /compact，把结果落盘核对，跑完删掉临时会话。
@@ -1000,8 +1109,9 @@ final class ChatStore: ObservableObject {
                 let finalTitle = extracted.count > 14 ? String(extracted.prefix(14)) : extracted
                 await MainActor.run {
                     guard !Task.isCancelled else { return }
-                    self.mutateCurrent { s in
-                        guard s.id == sessionID, let first = s.messages.firstIndex(where: { $0.role == .user }) else { return }
+                    // 按 sessionID 定位：生成标题期间用户可能已经切走，别改到别的对话上
+                    self.mutateSession(sessionID) { s in
+                        guard let first = s.messages.firstIndex(where: { $0.role == .user }) else { return }
                         // 只在标题还是"新对话"或首条消息截断值时覆盖
                         let fallback = s.messages[first].text
                         if s.title == "新对话" || s.title == fallback || s.title.hasSuffix("…") {
@@ -1198,10 +1308,9 @@ final class ChatStore: ObservableObject {
                 multi = obj["multi"] as? Bool ?? false
             }
             pendingChoice = ChoiceRequest(question: question, options: options, multiSelect: multi)
-            mutateCurrent { s in
-                guard let idx = s.messages.firstIndex(where: { $0.id == id }) else { return }
-                s.messages[idx].text = question
-                s.messages[idx].isChoice = true
+            updateMessage(id) { m in
+                m.text = question
+                m.isChoice = true
             }
             return
         }
@@ -1214,10 +1323,9 @@ final class ChatStore: ObservableObject {
             let options = obj["options"] as? [String] ?? []
             let multi = obj["multi"] as? Bool ?? false
             pendingChoice = ChoiceRequest(question: q, options: options, multiSelect: multi)
-            mutateCurrent { s in
-                guard let idx = s.messages.firstIndex(where: { $0.id == id }) else { return }
-                s.messages[idx].text = q
-                s.messages[idx].isChoice = true
+            updateMessage(id) { m in
+                m.text = q
+                m.isChoice = true
             }
             return
         }
@@ -1228,10 +1336,7 @@ final class ChatStore: ObservableObject {
         guard text.hasSuffix("？") || text.hasSuffix("?") else { return }
         guard text.count <= 120, text.split(separator: "\n").count <= 3 else { return }
         pendingChoice = ChoiceRequest(question: text, options: [])
-        mutateCurrent { s in
-            guard let idx = s.messages.firstIndex(where: { $0.id == id }) else { return }
-            s.messages[idx].isChoice = true
-        }
+        updateMessage(id) { m in m.isChoice = true }
     }
 
     private func currentText(id: UUID) -> String {
@@ -1259,28 +1364,48 @@ final class ChatStore: ObservableObject {
         flushScheduled = false
         guard !pendingText.isEmpty || !pendingReasoning.isEmpty || !pendingMetrics.isEmpty else { return }
 
-        mutateCurrent { s in
-            for (id, chunk) in pendingText {
-                if let idx = s.messages.firstIndex(where: { $0.id == id }) {
-                    s.messages[idx].text += chunk
-                }
+        // 按消息 id 找所属会话，而不是拿"当前会话"当目标：
+        // 流式收尾的那一帧可能晚于用户切走/删掉对话，落在当前会话上就会
+        // 给别的对话白刷一次 updatedAt（实测能把它顶到列表最前面）。
+        func locate(_ id: UUID) -> (Int, Int)? {
+            for (si, s) in sessions.enumerated() {
+                if let mi = s.messages.firstIndex(where: { $0.id == id }) { return (si, mi) }
             }
-            for (id, chunk) in pendingReasoning {
-                if let idx = s.messages.firstIndex(where: { $0.id == id }) {
-                    s.messages[idx].reasoning += chunk
-                }
+            return nil
+        }
+
+        var touched = false
+        var touchedSessions = Set<Int>()
+        for (id, chunk) in pendingText {
+            if let (si, mi) = locate(id) {
+                sessions[si].messages[mi].text += chunk
+                touchedSessions.insert(si)
+                touched = true
             }
-            for (id, m) in pendingMetrics {
-                if let idx = s.messages.firstIndex(where: { $0.id == id }) {
-                    s.messages[idx].tps = m.tps
-                    s.messages[idx].promptTokens = m.promptTokens
-                    s.messages[idx].generatedTokens = m.generatedTokens
-                    s.messages[idx].promptTPS = m.promptTPS
-                    s.messages[idx].promptMS = m.promptMS
-                    s.messages[idx].perTokenMS = m.perTokenMS
-                }
-                if m.tps > 0 { lastTPS = m.tps }
+        }
+        for (id, chunk) in pendingReasoning {
+            if let (si, mi) = locate(id) {
+                sessions[si].messages[mi].reasoning += chunk
+                touchedSessions.insert(si)
+                touched = true
             }
+        }
+        for (id, m) in pendingMetrics {
+            if let (si, mi) = locate(id) {
+                sessions[si].messages[mi].tps = m.tps
+                sessions[si].messages[mi].promptTokens = m.promptTokens
+                sessions[si].messages[mi].generatedTokens = m.generatedTokens
+                sessions[si].messages[mi].promptTPS = m.promptTPS
+                sessions[si].messages[mi].promptMS = m.promptMS
+                sessions[si].messages[mi].perTokenMS = m.perTokenMS
+                touchedSessions.insert(si)
+                touched = true
+            }
+            if m.tps > 0 { lastTPS = m.tps }
+        }
+        if touched {
+            for i in touchedSessions { sessions[i].updatedAt = Date() }
+            scheduleSave()
         }
         pendingText.removeAll()
         pendingReasoning.removeAll()
@@ -1290,13 +1415,14 @@ final class ChatStore: ObservableObject {
     private func fail(_ id: UUID, _ message: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.mutateCurrent { s in
-                guard let idx = s.messages.firstIndex(where: { $0.id == id }) else { return }
-                s.messages[idx].failed = true
-                s.messages[idx].text = s.messages[idx].text.isEmpty
-                    ? Lf("出错了：%@", message)
-                    : s.messages[idx].text + "\n\n" + Lf("（中断：%@）", message)
-            }
+            guard let si = self.sessions.firstIndex(where: { $0.messages.contains { $0.id == id } }),
+                  let mi = self.sessions[si].messages.firstIndex(where: { $0.id == id }) else { return }
+            self.sessions[si].messages[mi].failed = true
+            self.sessions[si].messages[mi].text = self.sessions[si].messages[mi].text.isEmpty
+                ? Lf("出错了：%@", message)
+                : self.sessions[si].messages[mi].text + "\n\n" + Lf("（中断：%@）", message)
+            self.sessions[si].updatedAt = Date()
+            self.scheduleSave()
         }
     }
 }

@@ -36,6 +36,13 @@ enum SessionExporter {
             }
             let who = m.role == .user ? "用户" : "助手"
             out += "## \(who)\n\n"
+            if let atts = m.attachments, !atts.isEmpty {
+                out += "**附件：**\n\n"
+                for a in atts {
+                    out += "- \(a.name)（\(a.text.count) 字\(a.truncated ? "，已截断" : "")）\n"
+                }
+                out += "\n"
+            }
             if !m.reasoning.isEmpty {
                 out += "<details><summary>思考过程</summary>\n\n"
                     + m.reasoning + "\n\n</details>\n\n"
@@ -78,6 +85,12 @@ enum SessionExporter {
                 if m.isSummaryBubble {
                     d["isSummary"] = true
                     d["summaryCount"] = m.summaryCount ?? 0
+                }
+                if let atts = m.attachments, !atts.isEmpty {
+                    d["attachments"] = atts.map {
+                        ["name": $0.name, "chars": $0.text.count,
+                         "truncated": $0.truncated, "text": $0.text]
+                    }
                 }
                 if m.promptTokens > 0 { d["promptTokens"] = m.promptTokens }
                 if m.generatedTokens > 0 { d["generatedTokens"] = m.generatedTokens }
