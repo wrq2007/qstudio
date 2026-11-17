@@ -38,8 +38,27 @@ final class ChatStore: ObservableObject {
     @Published private(set) var promptTokens: Int = 0
     @Published private(set) var generatedTokens: Int = 0
 
-    /// 持久化的系统指令：用来引导模型怎么回答（相当于 system prompt）
+    /// 新对话的默认角色提示词（设置页可改）。只影响之后新建的对话，
+    /// 已有对话各自带着自己的 rolePrompt，改这里不会把它改掉。
     @Published var instruction: String
+
+    /// 身份提示词：写死、用户改不了。它说明"你是谁、在什么环境里说话"，
+    /// 属于产品设定；而"怎么答"（角色/语气/领域）交给每个对话自己的 rolePrompt。
+    static let identityPrompt = """
+    你是 Q Studio 里的本地助手，运行在用户自己的电脑上，模型离线推理，无法联网、无法打开链接、无法访问用户的文件系统。
+    回答用简体中文（用户用其他语言提问时跟随用户）。不确定的地方直接说明不确定，不要编造事实、链接或数据。
+    """
+
+    /// 把身份和角色拼成一条 system 消息。角色为空时只发身份。
+    static func composeSystem(identity: String, role: String?) -> String {
+        let r = (role ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return r.isEmpty ? identity : identity + "\n\n" + r
+    }
+
+    /// 角色提示词编辑器的目标会话（nil = 没打开）
+    @Published var roleEditorSessionID: UUID?
+
+    func openRoleEditor(_ id: UUID?) { roleEditorSessionID = id }
 
     /// 模型给的候选方向，显示在输入栏上方
     @Published var pendingChoice: ChoiceRequest?
@@ -112,6 +131,33 @@ final class ChatStore: ObservableObject {
         UserDefaults.standard.set(instruction, forKey: "systemInstruction")
     }
 
+    /// 写某段对话自己的角色提示词（从角色编辑器保存时调用）
+    func setRolePrompt(_ text: String, for id: UUID) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[i].rolePrompt = text
+        scheduleSave()
+    }
+
+    /// MDRPTEST=1：把身份/角色拆分的结果落盘，核对迁移与合成后的 system 文案
+    func dumpRoleTestIfNeeded() {
+        guard ProcessInfo.processInfo.environment["MDRPTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDRPTEST") else { return }
+        var lines: [String] = []
+        lines.append("默认角色（新对话用）：\(instruction.isEmpty ? "<空>" : instruction)")
+        for s in sessions {
+            let role = s.rolePrompt.map { $0.isEmpty ? "<空>" : $0 } ?? "<nil 未迁移>"
+            lines.append("会话：\(s.title) | 角色：\(role)")
+        }
+        lines.append("--- 合成后的 system（当前会话）---")
+        lines.append(Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt))
+        try? lines.joined(separator: "\n").write(toFile: "/tmp/qstudio_role.txt",
+                                                 atomically: true, encoding: .utf8)
+    }
+
+    func rolePrompt(for id: UUID) -> String {
+        sessions.first(where: { $0.id == id })?.rolePrompt ?? ""
+    }
+
     // MARK: - 当前会话
 
     var current: ChatSession? {
@@ -155,7 +201,7 @@ final class ChatStore: ObservableObject {
         stop()
         // 侧栏选中了某个组时，新对话直接归进去——这样用户先选组再提问，回答完就在该组里
         let group = showUngroupedOnly ? nil : selectedGroupID
-        let s = ChatSession(groupID: group)
+        let s = ChatSession(groupID: group, rolePrompt: instruction)
         sessions.insert(s, at: 0)
         if select {
             currentID = s.id
@@ -308,9 +354,17 @@ final class ChatStore: ObservableObject {
             groups = glist
         }
         do {
-            let list = try JSONDecoder().decode([ChatSession].self, from: data)
+            var list = try JSONDecoder().decode([ChatSession].self, from: data)
+            // 旧数据没有 rolePrompt：用当时的全局指令补一份快照，行为保持不变；
+            // 补过之后再新建的对话都自带 rolePrompt（哪怕是空串），不会被误判成旧数据。
+            var migrated = 0
+            for i in list.indices where list[i].rolePrompt == nil {
+                list[i].rolePrompt = instruction
+                migrated += 1
+            }
             sessions = list
             currentID = list.first?.id
+            if migrated > 0 { scheduleSave() }
         } catch {
             // 防呆：解码失败不静默清空——先把损坏原件隔离保存，用户有机会找回来
             quarantineCorruptStore(data: data)
@@ -394,12 +448,11 @@ final class ChatStore: ObservableObject {
         isStreaming = true
         generatedTokens = 0
 
-        // 发给模型的历史：系统指令在最前面
+        // 发给模型的历史：身份 + 这段对话的角色提示词，合成一条 system 消息
         var payload: [[String: String]] = []
-        let instr = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !instr.isEmpty {
-            payload.append(["role": "system", "content": instr])
-        }
+        payload.append(["role": "system",
+                        "content": Self.composeSystem(identity: Self.identityPrompt,
+                                                      role: current?.rolePrompt)])
         for m in messages where m.id != botID && !m.failed && !m.text.isEmpty {
             payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
         }
@@ -436,10 +489,9 @@ final class ChatStore: ObservableObject {
         generatedTokens = 0
 
         var payload: [[String: String]] = []
-        let instr = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !instr.isEmpty {
-            payload.append(["role": "system", "content": instr])
-        }
+        payload.append(["role": "system",
+                        "content": Self.composeSystem(identity: Self.identityPrompt,
+                                                      role: current?.rolePrompt)])
         payload.append(["role": "system",
                         "content": "用户还没有明确方向。请你提出一个澄清问题，给出 3 到 5 个具体的选项供用户挑选。"
                         + "如果这些选项可以并存、用户可能同时选多个，就把 multi 设为 true（多选）；"

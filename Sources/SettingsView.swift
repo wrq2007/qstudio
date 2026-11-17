@@ -132,11 +132,11 @@ struct SettingsView: View {
 
     private var systemPrompt: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("系统提示词")
+            Text("新对话默认角色提示词")
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(Palette.text)
 
-            Text("这段话会作为 system 提示，每次请求都带上，用来引导模型怎么回答。留空就是不加引导。")
+            Text("只给之后新建的对话用：告诉模型该怎么回答（领域、语气、格式）。已有对话各自带着自己的角色提示词，改这里不会影响它们；要改某一段，去输入框上方那条提示点编辑。")
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.subtle)
                 .fixedSize(horizontal: false, vertical: true)

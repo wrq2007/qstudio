@@ -73,6 +73,8 @@
 "发送（Enter）" = "Send (Enter)";
 "取消" = "Cancel";
 "取消归档" = "Unarchive";
+"只影响「%@」这段对话：告诉模型该怎么回答（领域、语气、格式）。留空就只用固定的身份提示词。" = "Affects only “%@”: tells the model how to answer (domain, tone, format). Leave it empty to use just the fixed identity prompt.";
+"只给之后新建的对话用：告诉模型该怎么回答（领域、语气、格式）。已有对话各自带着自己的角色提示词，改这里不会影响它们；要改某一段，去输入框上方那条提示点编辑。" = "Applies to chats you create from now on: tells the model how to answer (domain, tone, format). Existing chats keep their own role prompt and are unaffected — to change one, click the banner above the composer.";
 "可多选，选完点右下角发送" = "Multiple choices allowed; tap Send when done";
 "同款模型的无损档位，1.8 GB 也能塞进 8 GB 显存。" = "Lossless tier of the same model; fits in 8 GB VRAM.";
 "启动失败" = "Failed to start";
@@ -130,6 +132,7 @@
 "新一代 4B，中文语感与指令遵循都比 2.5 代好一截，显存同样只占 3 GB 出头。" = "Next-gen 4B: better Chinese fluency and instruction following than 2.5, still ~3 GB.";
 "新对话" = "New chat";
 "新对话 ⌘N" = "New chat ⌘N";
+"新对话默认角色提示词" = "Default role prompt for new chats";
 "新建工作组" = "New group";
 "无法写入 Vulkan 配置" = "Could not write Vulkan config";
 "无法启动推理进程：%@" = "Could not start the inference process: %@";
@@ -192,6 +195,8 @@
 "经典 7B，英文指令跟随稳，中文偏弱。" = "Classic 7B: solid English instruction following, weaker in Chinese.";
 "绘图中…" = "Rendering…";
 "综合性价比最高的一档。中文和日常问答都够用，显存占用不到 3 GB。" = "Best overall value. Good for Chinese and everyday Q&A, under 3 GB VRAM.";
+"编辑角色提示词…" = "Edit role prompt…";
+"编辑这段对话的角色提示词" = "Edit this chat's role prompt";
 "聊一句就会自动出现在这里" = "Start a chat and it will appear here";
 "英文" = "English";
 "苹果芯片走的是统一内存 + 原生 Metal 后端，llama.cpp、Ollama、LM Studio 都能直接吃满 GPU，不需要也不应该经 MoltenVK 转发。装这个反而更慢。" = "Apple silicon uses unified memory with the native Metal backend; llama.cpp, Ollama and LM Studio all use the GPU directly. Routing through MoltenVK is slower, not faster.";
@@ -199,6 +204,7 @@
 "补充" = "Add";
 "补充说明…" = "Add a note…";
 "装不下" = "can't hold";
+"角色提示词" = "Role prompt";
 "设置" = "Settings";
 "设置：系统提示词、上下文默认值" = "Settings: system prompt, context defaults";
 "试着问点什么" = "Ask something to get started";
@@ -209,6 +215,7 @@
 "谷歌 4B，长上下文表现好。注意它的 KV 缓存有 1 GB 以上。" = "Google's 4B: good at long context. Note its KV cache exceeds 1 GB.";
 "超出显存" = "Out of VRAM";
 "超显存" = "Exceeds VRAM";
+"身份提示词（固定，不能改）" = "Identity prompt (fixed, read-only)";
 "轻量" = "Light";
 "运行日志" = "Runtime log";
 "还没有内容" = "No content yet";
@@ -218,6 +225,7 @@
 "这" = "These";
 "这 %lld 段归档对话及其全部消息会被永久删除，删了就找不回来了。" = "These %lld archived chats and all their messages will be permanently deleted. This cannot be undone.";
 "这是 Apple Silicon 机器" = "This is an Apple Silicon Mac";
+"这段对话" = "this chat";
 "这段话会作为 system 提示，每次请求都带上，用来引导模型怎么回答。留空就是不加引导。" = "Sent as the system prompt on every request to steer how the model replies. Leave empty for no guidance.";
 "退出程序" = "Quit Q Studio";
 "适用范围：Intel x86_64 处理器 + AMD 独立显卡（Polaris / Vega / Navi），macOS 14 及以上。" = "Supported: Intel x86_64 + AMD discrete GPU (Polaris / Vega / Navi), macOS 14+.";

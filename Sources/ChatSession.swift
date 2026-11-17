@@ -69,13 +69,19 @@ struct ChatSession: Identifiable, Codable, Equatable {
     /// 所属工作组；nil = 未分组。旧数据没有这个字段，解码时为 nil。
     var groupID: UUID?
 
+    /// 这段对话自己的角色提示词（怎么答）。
+    /// 旧数据没有这个字段，解码为 nil，加载时用当时的全局指令快照补齐——
+    /// 不能留空，否则老对话的行为会突然变。
+    var rolePrompt: String?
+
     init(id: UUID = UUID(),
          title: String = "新对话",
          createdAt: Date = Date(),
          updatedAt: Date = Date(),
          archived: Bool = false,
          messages: [ChatMessage] = [],
-         groupID: UUID? = nil) {
+         groupID: UUID? = nil,
+         rolePrompt: String? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -83,6 +89,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
         self.archived = archived
         self.messages = messages
         self.groupID = groupID
+        self.rolePrompt = rolePrompt
     }
 
     /// 标题的显示形态：默认占位标题「新对话」跟随界面语言，其余是用户/模型生成的原文。

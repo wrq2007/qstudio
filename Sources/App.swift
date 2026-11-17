@@ -79,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         installSignalHandlers()
         MenuBarController.shared.install()
+        if ProcessInfo.processInfo.environment["MDRPTEST"] == "1"
+            || UserDefaults.standard.bool(forKey: "MDRPTEST") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { ChatStore.shared.dumpRoleTestIfNeeded() }
+        }
         if ProcessInfo.processInfo.environment["MDMENUBAR"] == "1"
             || UserDefaults.standard.bool(forKey: "MDMENUBAR") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { MenuBarController.shared.selfTest() }

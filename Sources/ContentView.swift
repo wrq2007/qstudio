@@ -499,6 +499,14 @@ private struct ChatView: View {
             LogView(log: server.log)
                 .localized()
         }
+        .sheet(item: Binding(
+            get: { chat.roleEditorSessionID.map { RoleEditTarget(id: $0) } },
+            set: { if $0 == nil { chat.roleEditorSessionID = nil } }
+        )) { target in
+            RolePromptSheet(sessionID: target.id)
+                .environmentObject(chat)
+                .localized()
+        }
     }
 
     /// 模型文件名往往很长，顶栏只显示掐头去尾的缩写
@@ -914,21 +922,22 @@ private struct ChatView: View {
             // 候选方向模块：在输入栏上方
             choiceModule
 
-            // 有系统提示词时挂一条，能看到它生效了（点开是设置）
-            if !chat.instruction.isEmpty {
+            // 这段对话有角色提示词时挂一条，能看到它生效了（点开是本对话的编辑器）
+            if let role = chat.current?.rolePrompt,
+               !role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 HStack(spacing: 5) {
                     Image(systemName: "quote.bubble")
                         .font(.system(size: 9.5))
-                    Text(chat.instruction)
+                    Text(role)
                         .lineLimit(1)
                     Button {
-                        showSettings = true
+                        chat.openRoleEditor(chat.currentID)
                     } label: {
-                        Image(systemName: "gearshape")
+                        Image(systemName: "square.and.pencil")
                             .font(.system(size: 9))
                     }
                     .buttonStyle(.plain)
-                    .help("在设置里修改系统提示词")
+                    .help(L("编辑这段对话的角色提示词"))
                 }
                 .font(.system(size: 10))
                 .foregroundStyle(Palette.subtle)
@@ -1084,6 +1093,9 @@ private struct ChatView: View {
     }}
 
 // MARK: - 滚动位置偏好键
+
+/// .sheet(item:) 需要一个 Identifiable 的载体，这里把会话 id 包一层
+private struct RoleEditTarget: Identifiable { let id: UUID }
 
 private struct BottomOffsetKey: PreferenceKey {
     static var defaultValue: CGFloat = .greatestFiniteMagnitude

@@ -389,6 +389,11 @@ struct SidebarView: View {
             hoveredID = hovering ? s.id : (hoveredID == s.id ? nil : hoveredID)
         }
         .contextMenu {
+            Button {
+                chat.openRoleEditor(s.id)
+            } label: {
+                Label("编辑角色提示词…", systemImage: "text.quote")
+            }
             assignGroupMenu(for: s)
             Divider()
             Button {

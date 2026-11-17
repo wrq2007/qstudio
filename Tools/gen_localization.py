@@ -51,6 +51,16 @@ T = {
     "对话保存在本机\n~/Library/Application Support/LocalModel":
         "Chats are stored locally\n~/Library/Application Support/LocalModel",
     "系统提示词": "System prompt", "默认上下文长度": "Default context length",
+    "新对话默认角色提示词": "Default role prompt for new chats",
+    "只给之后新建的对话用：告诉模型该怎么回答（领域、语气、格式）。已有对话各自带着自己的角色提示词，改这里不会影响它们；要改某一段，去输入框上方那条提示点编辑。":
+        "Applies to chats you create from now on: tells the model how to answer (domain, tone, format). Existing chats keep their own role prompt and are unaffected — to change one, click the banner above the composer.",
+    "角色提示词": "Role prompt",
+    "这段对话": "this chat",
+    "只影响「%@」这段对话：告诉模型该怎么回答（领域、语气、格式）。留空就只用固定的身份提示词。":
+        "Affects only \u201c%@\u201d: tells the model how to answer (domain, tone, format). Leave it empty to use just the fixed identity prompt.",
+    "身份提示词（固定，不能改）": "Identity prompt (fixed, read-only)",
+    "编辑这段对话的角色提示词": "Edit this chat's role prompt",
+    "编辑角色提示词…": "Edit role prompt…",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",
     "清空所有归档？": "Clear all archives?", "删除归档？": "Delete archive?",
