@@ -580,7 +580,11 @@ private struct ChatView: View {
     private var conversation: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
+                // 这里必须用 VStack 而不是 LazyVStack：
+                // 懒加载只按已渲染的几行估总高度，滚动过程中估算值会被纠正
+                // （实测同一段对话 docH 从 5357 掉到 3693），滚动条滑块按错误的总高度
+                // 计算位置，鼠标一动就跳一下。全量布局后高度稳定，滑块才跟手。
+                VStack(alignment: .leading, spacing: 16) {
                     if chat.messages.isEmpty {
                         emptyState
                     }
@@ -591,6 +595,9 @@ private struct ChatView: View {
                             isLast: msg.id == chat.messages.last(where: { !$0.isChoice })?.id
                         )
                     }
+                    // 底部留白放在哨兵之前：留白若在外层 padding 里，
+                    // scrollTo(bottom) 会把哨兵对到视口底边，永远差 18pt 不到底。
+                    Color.clear.frame(height: 18)
                     // 底部哨兵：用它在 scroll 坐标系里的位置判断用户是否还贴着底部
                     Color.clear.frame(height: 1).id("bottom")
                         .background(GeometryReader { g in
@@ -599,7 +606,7 @@ private struct ChatView: View {
                         })
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 18)
+                .padding(.top, 18)
             }
             .coordinateSpace(name: "chatScroll")
             .background(GeometryReader { g in
@@ -610,10 +617,13 @@ private struct ChatView: View {
                 // 哨兵 minY <= 可视区高度 + 60 视为「贴底」，留 60pt 容差
                 autoScroll = offset <= scrollViewportHeight + 60
             }
+            // 打开应用 / 切换对话：直接落到最新一条，而不是停在最顶端。
+            // 等一帧再滚，否则布局还没算完，scrollTo 找不到哨兵。
+            .onAppear { jumpToBottom(proxy) }
+            .onChange(of: chat.currentID) { jumpToBottom(proxy) }
             .onChange(of: chat.messages.last?.text) {
-                if autoScroll {
-                    withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
+                // 流式跟随不加动画：每个 token 都起一次 0.12s 动画会互相打断，看着反而卡
+                if autoScroll { proxy.scrollTo("bottom", anchor: .bottom) }
             }
             .onChange(of: chat.messages.count) {
                 if autoScroll { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -624,6 +634,15 @@ private struct ChatView: View {
     /// 用户往上滚动后暂停自动跟随；回到底部会自动恢复（由 onPreferenceChange 判定）
     @State private var autoScroll = true
     @State private var scrollViewportHeight: CGFloat = 600
+
+    private func jumpToBottom(_ proxy: ScrollViewProxy) {
+        autoScroll = true
+        // 两个时间点都滚一次：第一帧先占位，布局完成后（下一轮 runloop）再校正
+        proxy.scrollTo("bottom", anchor: .bottom)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            proxy.scrollTo("bottom", anchor: .bottom)
+        }
+    }
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 12) {

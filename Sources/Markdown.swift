@@ -114,7 +114,28 @@ enum MarkdownParser {
         return nil
     }
 
+    /// 解析结果缓存：对话区改成非懒加载后，每次流式刷新都会重算所有消息的 body，
+    /// 没有缓存就会把整段历史反复切一遍词（Intel 机上体感明显）。
+    /// 命中率很高——只有正在流式输出的那一条会变。
+    private final class BlocksBox {
+        let blocks: [MDBlock]
+        init(_ blocks: [MDBlock]) { self.blocks = blocks }
+    }
+    private static let cache: NSCache<NSString, BlocksBox> = {
+        let c = NSCache<NSString, BlocksBox>()
+        c.countLimit = 300
+        return c
+    }()
+
     static func parse(_ source: String) -> [MDBlock] {
+        let key = source as NSString
+        if key.length > 0, let hit = cache.object(forKey: key) { return hit.blocks }
+        let blocks = parseUncached(source)
+        if key.length > 0 { cache.setObject(BlocksBox(blocks), forKey: key) }
+        return blocks
+    }
+
+    private static func parseUncached(_ source: String) -> [MDBlock] {
         let normalized = source
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
