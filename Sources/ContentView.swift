@@ -82,6 +82,22 @@ struct ContentView: View {
     """
 
     /// SVG 渲染自检样例（MDSVGTEST=1）
+    /// 沙箱自检用：故意塞满能外联/能执行的东西
+    static let svgSecSample = """
+    图里带了一堆不该生效的东西：
+    <svg width="320" height="200" viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" onload="alert('onload')">
+      <script>document.body.innerHTML='SCRIPT RAN'</script>
+      <style>@import url(https://evil.example/a.css); .x{background:url(https://evil.example/b.png)}</style>
+      <rect width="320" height="200" fill="#eef2ff"/>
+      <rect class="x" x="20" y="20" width="280" height="120" rx="10" fill="#c7d2fe"/>
+      <defs><linearGradient id="g"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>
+      <circle cx="70" cy="80" r="26" fill="url(#g)"/>
+      <image x="140" y="50" width="60" height="60" href="https://evil.example/leak.png"/>
+      <image x="220" y="50" width="60" height="60" xlink:href="https://evil.example/leak2.png"/>
+      <text x="160" y="175" font-family="Helvetica" font-size="14" fill="#1e1b4b" text-anchor="middle">若脚本生效，这张图会消失</text>
+    </svg>
+    """
+
     static let svgSample = """
     这是一张地层剖面示意图：
     ```svg
@@ -132,13 +148,22 @@ struct ContentView: View {
                 chat.appendMessage(ChatMessage(role: .user, text: "帮我整理这份野外记录"))
                 chat.appendMessage(ChatMessage(role: .assistant, text: Self.mdSample, tps: 20.4))
             }
-            if ProcessInfo.processInfo.environment["MDSVGTEST"] == "1" {
+            if ProcessInfo.processInfo.environment["MDSVGTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDSVGTEST") {
                 chat.appendMessage(ChatMessage(role: .user, text: "画个示意图"))
                 chat.appendMessage(ChatMessage(role: .assistant, text: Self.svgSample, tps: 18.2))
             }
-            if ProcessInfo.processInfo.environment["MDSVGUSERTEST"] == "1" {
+            if ProcessInfo.processInfo.environment["MDSVGUSERTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDSVGUSERTEST") {
                 chat.appendMessage(ChatMessage(role: .user, text: "画板块碰撞图"))
                 chat.appendMessage(ChatMessage(role: .assistant, text: Self.svgUserSample, tps: 18.2))
+            }
+            if ProcessInfo.processInfo.environment["MDSVGSECTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDSVGSECTEST") {
+                // 恶意 SVG：脚本、事件属性、外链图片、CSS 外链全给上，验证都不生效
+                chat.appendMessage(ChatMessage(role: .user, text: "画个示意图"))
+                chat.appendMessage(ChatMessage(role: .assistant, text: Self.svgSecSample, tps: 18.2))
+                SVGView.selfTestDump(Self.svgSecSample)
             }
             if ProcessInfo.processInfo.environment["MDSIDEBARTEST"] == "1" {
                 chat.seedDemoSessions()

@@ -131,13 +131,18 @@ struct SVGView: View {
     }
 
     /// 把 SVG 包成最小 HTML。剥掉脚本/事件属性/外链，SVG 按容器等比缩放。
+    /// 正则剥离只是第一层：真正兜底的是内容规则列表和导航白名单（见 NetworkBlocker / Coordinator）。
     private static func wrap(_ svg: String) -> String {
         var clean = svg
         let strips = [
             "<script[\\s\\S]*?</script>",
             "<foreignObject[\\s\\S]*?</foreignObject>",
             "\\son[a-zA-Z]+\\s*=\\s*(\"[^\"]*\"|'[^']*')",
-            "(xlink:)?href\\s*=\\s*(\"|')(https?:|javascript:|//)[^\"']*\\2"
+            // href / xlink:href 指向外部协议的一律删掉（data: 是内联图片，保留）
+            "(xlink:)?href\\s*=\\s*(\"|')\\s*(?:https?:|javascript:|file:|blob:|ftp:|wss?:|//)[^\"']*\\2",
+            // <style> 里的外部引用：@import 整条删，url(外部) 删掉（url(#渐变) 保留）
+            "@import[^;]*;",
+            "url\\(\\s*[\"']?\\s*(?:https?:|file:|blob:|ftp:|wss?:|//)[^)]*\\)"
         ]
         for p in strips {
             if let re = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
@@ -156,6 +161,11 @@ struct SVGView: View {
         """
     }
 
+    /// 自检用：把脱敏后的 HTML 写文件，方便核对哪些东西被剥掉了
+    static func selfTestDump(_ svg: String) {
+        try? wrap(svg).write(toFile: "/tmp/qstudio_svg_wrap.html", atomically: true, encoding: .utf8)
+    }
+
     private func saveSVG() {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "drawing.svg"
@@ -165,7 +175,50 @@ struct SVGView: View {
     }
 }
 
-/// WKWebView 的 SwiftUI 包装。JS 关闭 + 拦外链。
+/// 阻断一切网络加载：一条内容规则列表覆盖所有子资源（<image href>、CSS url()、@font-face…）。
+/// 编译是异步的，编译结果缓存在静态属性里，第二次起同步可用。
+enum NetworkBlocker {
+    private static var cached: WKContentRuleList?
+    private static var compiling = false
+    private static var waiters: [() -> Void] = []
+
+    /// 三条规则分别拦 http(s)/ws(s)/ftp，比 `.*` 更保守，不会误伤 about:blank 与 data:
+    private static let rules = """
+    [
+      {"trigger":{"url-filter":"^https?://.*","url-filter-is-case-sensitive":false},"action":{"type":"block"}},
+      {"trigger":{"url-filter":"^wss?://.*","url-filter-is-case-sensitive":false},"action":{"type":"block"}},
+      {"trigger":{"url-filter":"^ftp://.*","url-filter-is-case-sensitive":false},"action":{"type":"block"}}
+    ]
+    """
+
+    static func apply(to web: WKWebView, then done: @escaping () -> Void) {
+        if let list = cached {
+            web.configuration.userContentController.add(list)
+            done()
+            return
+        }
+        waiters.append(done)
+        if compiling { return }
+        compiling = true
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "block-network",
+            encodedContentRuleList: rules
+        ) { list, _ in
+            DispatchQueue.main.async {
+                compiling = false
+                cached = list
+                if let list {
+                    web.configuration.userContentController.add(list)
+                }
+                let pending = waiters
+                waiters = []
+                pending.forEach { $0() }
+            }
+        }
+    }
+}
+
+/// WKWebView 的 SwiftUI 包装。JS 关闭 + 内容规则列表断网 + 导航白名单。
 private struct SVGWebView: NSViewRepresentable {
     let html: String
     @Binding var loaded: Bool
@@ -174,12 +227,18 @@ private struct SVGWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
+        // 两道开关都关：preferences 是旧接口，allowsContentJavaScript 是新接口
         cfg.preferences.javaScriptEnabled = false
+        cfg.defaultWebpagePreferences.allowsContentJavaScript = false
         cfg.allowsAirPlayForMediaPlayback = false
+        cfg.websiteDataStore = .nonPersistent()      // 不留 cookie / 缓存
         let web = WKWebView(frame: .zero, configuration: cfg)
         web.navigationDelegate = context.coordinator
         web.allowsMagnification = false
-        web.loadHTMLString(html, baseURL: nil)
+        // 规则列表装好再加载，避免第一帧抢跑发出请求
+        NetworkBlocker.apply(to: web) {
+            web.loadHTMLString(html, baseURL: nil)
+        }
         return web
     }
 
@@ -202,15 +261,30 @@ private struct SVGWebView: NSViewRepresentable {
             DispatchQueue.main.async { self.loaded.wrappedValue = true }
         }
 
+        /// 白名单：只放行 about: / data:（页面本体和 data: 内联图），其余一律取消。
+        /// 白名单比黑名单安全——将来出现新的 scheme 也不会漏。
+        private static func isAllowed(_ url: URL?) -> Bool {
+            guard let scheme = url?.scheme?.lowercased() else { return true }   // 无 scheme = 本地 HTML
+            return scheme == "about" || scheme == "data"
+        }
+
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url,
-               url.scheme?.hasPrefix("http") == true || url.scheme == "javascript" {
-                decisionHandler(.cancel)
-            } else {
-                decisionHandler(.allow)
-            }
+            decisionHandler(Self.isAllowed(navigationAction.request.url) ? .allow : .cancel)
+        }
+
+        func webView(_ webView: WKWebView,
+                     decidePolicyFor navigationResponse: WKNavigationResponse,
+                     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            decisionHandler(Self.isAllowed(navigationResponse.response.url) ? .allow : .cancel)
+        }
+
+        /// 任何失败（包括被我们拦掉的请求）都要撤掉「绘图中」，否则界面会一直转圈
+        func webView(_ webView: WKWebView,
+                     didFailProvisionalNavigation navigation: WKNavigation!,
+                     withError error: Error) {
+            DispatchQueue.main.async { self.loaded.wrappedValue = true }
         }
     }
 }
