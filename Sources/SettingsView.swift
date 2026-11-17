@@ -8,24 +8,63 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmClearArchived = false
     @State private var pendingDelete: ChatSession?
+    @State private var selectedTab: SettingsTab = UserDefaults.standard.string(forKey: "MDSettingTab") == "archives"
+        ? .archives : UserDefaults.standard.string(forKey: "MDSettingTab") == "about" ? .about : .general
+    @State private var archiveSearch = ""
+
+    private enum SettingsTab: String, CaseIterable, Identifiable {
+        case general, archives, about
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .general: return "通用"
+            case .archives: return "归档对话"
+            case .about: return "关于"
+            }
+        }
+    }
 
     private var archivedSessions: [ChatSession] {
         chat.sessions.filter { $0.archived }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    private var filteredArchives: [ChatSession] {
+        let q = archiveSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return archivedSessions }
+        return archivedSessions.filter { s in
+            s.title.lowercased().contains(q)
+                || s.messages.contains { $0.text.lowercased().contains(q) }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
+            Picker("", selection: $selectedTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(L(tab.label)).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 18)
+            .padding(.bottom, 10)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    languageSection
-                    systemPrompt
-                    contextSection
-                    archivedSection
-                    aboutSection
+                    switch selectedTab {
+                    case .general:
+                        languageSection
+                        systemPrompt
+                        contextSection
+                    case .archives:
+                        archivedSection
+                    case .about:
+                        aboutSection
+                    }
                 }
                 .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(width: 560, height: 560)
@@ -184,13 +223,31 @@ struct SettingsView: View {
                         .foregroundStyle(Color(red: 0.85, green: 0.25, blue: 0.25))
                 }
             }
+            // 搜索框
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.subtle)
+                TextField(L("搜索归档对话"), text: $archiveSearch)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11.5))
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Palette.background))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Palette.border))
+
             if archivedSessions.isEmpty {
                 Text("还没有归档的对话。在对话列表右键可以归档。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.subtle)
+            } else if filteredArchives.isEmpty {
+                Text("没有匹配的归档对话")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.subtle)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(archivedSessions) { s in
+                    ForEach(filteredArchives) { s in
                         HStack(spacing: 7) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(s.title).font(.system(size: 11.5)).foregroundStyle(Palette.text).lineLimit(1)
@@ -208,7 +265,7 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 7).padding(.horizontal, 9)
                         .background(RoundedRectangle(cornerRadius: 7).fill(Palette.background))
-                        if s.id != archivedSessions.last?.id { Divider().opacity(0.4) }
+                        if s.id != filteredArchives.last?.id { Divider().opacity(0.4) }
                     }
                 }
             }

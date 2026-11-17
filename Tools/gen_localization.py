@@ -45,6 +45,9 @@ T = {
 
     # 设置页
     "界面语言": "Interface Language", "切换后立即生效，无需重启。": "Takes effect immediately, no restart needed.",
+    "通用": "General", "归档对话": "Archives", "关于": "About",
+    "搜索归档对话": "Search archived chats", "没有匹配的归档对话": "No matching archived chats",
+    "搜索对话": "Search chats", "没有匹配的对话": "No matching chats",
     "系统提示词": "System prompt", "默认上下文长度": "Default context length",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",

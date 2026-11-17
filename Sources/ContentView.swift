@@ -372,10 +372,10 @@ private struct ChatView: View {
                     options: ["效率提升与系统搭建", "应对拖延与专注力管理", "优先级排序与目标拆解", "工作与生活的平衡", "其他补充…"],
                     multiSelect: true)
             }
-            if ProcessInfo.processInfo.environment["MDINSTTEST"] == "1" {
-                chat.instruction = "你是一个地质学导师，回答时先给结论再给依据。"
-                chat.saveInstruction()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { showSettings = true }
+            let instTest = ProcessInfo.processInfo.environment["MDINSTTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDINSTTEST")
+            if instTest {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { showSettings = true }
             }
             if ProcessInfo.processInfo.environment["MDASKTEST"] == "1" {
                 // 等服务就绪后让模型反问一次，验证问题卡片

@@ -15,14 +15,20 @@ struct SidebarView: View {
     @State private var showNewGroup = false
     @State private var newGroupName = ""
     @State private var pendingGroupDelete: WorkGroup?
+    @State private var chatSearch = ""
 
-    /// 按当前选中的组筛选；nil = 全部
+    /// 按当前选中的组筛选；nil = 全部；再按搜索词过滤
     private var activeSessions: [ChatSession] {
-        chat.sessions.filter { s in
+        let q = chatSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return chat.sessions.filter { s in
             guard !s.archived else { return false }
             if chat.showUngroupedOnly { return s.groupID == nil }
             if let gid = chat.selectedGroupID { return s.groupID == gid }
             return true
+        }.filter { s in
+            guard !q.isEmpty else { return true }
+            return s.title.lowercased().contains(q)
+                || s.messages.contains { $0.text.lowercased().contains(q) }
         }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
@@ -238,14 +244,48 @@ struct SidebarView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 1) {
-                    ForEach(activeSessions) { s in
-                        row(s)
+            VStack(spacing: 0) {
+                // 搜索框
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.subtle)
+                    TextField(L("搜索对话"), text: $chatSearch)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.text)
+                    if !chatSearch.isEmpty {
+                        Button {
+                            chatSearch = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.subtle)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
                 .padding(.horizontal, 6)
-                .padding(.vertical, 6)
+                .padding(.top, 4)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(activeSessions) { s in
+                            row(s)
+                        }
+                        if activeSessions.isEmpty && !chatSearch.isEmpty {
+                            Text("没有匹配的对话")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(Palette.subtle)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 20)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
+                }
             }
         }
     }

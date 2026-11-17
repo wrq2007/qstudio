@@ -85,6 +85,7 @@
 "建议 %@K" = "Suggest %@K";
 "开启深度思考，显示推理过程（会重载模型）" = "Enable Deep Thinking to show reasoning (reloads model)";
 "归档" = "Archive";
+"归档对话" = "Archives";
 "归档的对话" = "Archived chats";
 "当前" = "Current";
 "当前已经是新对话了" = "Already a new chat";
@@ -98,6 +99,8 @@
 "打开模型目录" = "Open models folder";
 "推理" = "Reasoning";
 "推荐" = "Recommended";
+"搜索对话" = "Search chats";
+"搜索归档对话" = "Search archived chats";
 "效率提升与系统搭建" = "Efficiency & system setup";
 "数学" = "Math";
 "新一代 4B，中文语感与指令遵循都比 2.5 代好一截，显存同样只占 3 GB 出头。" = "Next-gen 4B: better Chinese fluency and instruction following than 2.5, still ~3 GB.";
@@ -130,6 +133,8 @@
 "模型管理" = "Models";
 "模型还没准备好（%@），等加载完再发。" = "Model not ready (%@). Wait until loading finishes.";
 "模型还没准备好（%@），等加载完再问。" = "Model not ready (%@). Wait until loading finishes.";
+"没有匹配的对话" = "No matching chats";
+"没有匹配的归档对话" = "No matching archived chats";
 "没有可用的 GPU" = "No GPU available";
 "测试" = "Test";
 "深度思考" = "Deep Thinking";
