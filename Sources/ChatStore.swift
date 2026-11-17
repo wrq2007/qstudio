@@ -90,6 +90,9 @@ final class ChatStore: ObservableObject {
 
     /// 工作组（对话分组）。单独存 groups.json，不混进 sessions.json 以免破坏旧数据兼容。
     @Published var groups: [WorkGroup] = []
+    /// 提示词模板（内置 + prompts.json）
+    @Published var templates: [PromptTemplate] = PromptLibrary.load()
+
     /// 侧栏当前选中的组；nil = 全部对话。放在这里让新建对话能自动归入选中的组。
     @Published var selectedGroupID: UUID?
     /// true = 侧栏只看未分组对话
@@ -261,6 +264,17 @@ final class ChatStore: ObservableObject {
         promptTPS = 0
         scheduleSave()
         return s.id
+    }
+
+    /// 用模板新建对话：角色和采样都用模板的，采样没写就沿用默认
+    @discardableResult
+    func newSession(from template: PromptTemplate, select shouldSelect: Bool = true) -> UUID {
+        let id = newSession(select: shouldSelect)
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return id }
+        sessions[i].rolePrompt = template.role
+        if let sp = template.sampling { sessions[i].sampling = sp }
+        scheduleSave()
+        return id
     }
 
     func select(_ id: UUID) {

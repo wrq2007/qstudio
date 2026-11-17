@@ -72,6 +72,12 @@ T = {
         "Applies to subsequent turns of this chat. Lower temperature is steadier but repeats more; higher temperature wanders further.",
     "调整采样参数：温度、Top-K、重复惩罚等": "Tune sampling: temperature, top-K, repeat penalty",
 
+    # 提示词模板
+    "翻译": "Translate", "摘要": "Summarize", "代码审阅": "Code review",
+    "润色": "Polish", "周报": "Weekly report",
+    "用模板新建对话": "New chat from template",
+    "打开模板文件": "Open templates file",
+
     # 消息级操作
     "重新生成": "Regenerate", "继续生成": "Continue", "编辑并重发…": "Edit and resend…",
     "复制": "Copy", "删除这条": "Delete message", "编辑消息": "Edit message",

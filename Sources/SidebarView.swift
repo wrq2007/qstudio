@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// 左栏对话历史：切换、归档、删除。
 ///
@@ -121,6 +122,29 @@ struct SidebarView: View {
             .foregroundStyle(chat.canCreateNewSession ? Palette.subtle : Palette.subtle.opacity(0.3))
             .disabled(!chat.canCreateNewSession)
             .help(chat.canCreateNewSession ? L("新对话 ⌘N") : L("当前已经是新对话了"))
+
+            // 模板新建：选一个角色直接开新对话
+            Menu {
+                ForEach(chat.templates) { t in
+                    Button {
+                        chat.newSession(from: t)
+                    } label: {
+                        Text(t.title)
+                    }
+                }
+                Divider()
+                Button(L("打开模板文件")) {
+                    NSWorkspace.shared.open(PromptLibrary.storeURL)
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(Palette.subtle)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 14)
+            .help(L("用模板新建对话"))
 
         }
         .padding(.horizontal, 12)
