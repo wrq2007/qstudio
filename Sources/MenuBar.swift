@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 
-/// 菜单栏图标 + 下拉菜单：最近 5 个对话、退出程序。
+/// 菜单栏图标 + 下拉菜单：最近 5 个对话、退出 Q Studio。
 /// 关掉主窗口后 app 继续驻留在菜单栏（见 AppDelegate.applicationShouldTerminateAfterLastWindowClosed）。
 final class MenuBarController: NSObject, NSMenuDelegate {
     static let shared = MenuBarController()
@@ -84,7 +84,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: L("退出程序"), action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: L("退出 Q Studio"), action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }

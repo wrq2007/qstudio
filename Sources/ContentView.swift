@@ -1132,6 +1132,12 @@ private struct ChatView: View {
                                 .font(.system(size: 11))
                             Text("深度思考")
                                 .font(.system(size: 10.5))
+                            // 生成过程中改的开关要等这一轮结束才重载，标出来免得以为没生效
+                            if server.thinkPendingApply {
+                                Text("下一轮生效")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Palette.subtle)
+                            }
                         }
                         .foregroundStyle(server.thinkEnabled ? Palette.accent : Palette.subtle)
                         .padding(.horizontal, 6)
@@ -1145,7 +1151,10 @@ private struct ChatView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(server.thinkEnabled ? L("关闭深度思考（会重载模型）") : L("开启深度思考，显示推理过程（会重载模型）"))
+                    .help(server.thinkPendingApply
+                          ? L("已记录，本轮输出结束后重载模型生效")
+                          : (server.thinkEnabled ? L("关闭深度思考（会重载模型）")
+                                                 : L("开启深度思考，显示推理过程（会重载模型）")))
 
                     Button {
                         if chat.isStreaming { chat.stop() } else { send() }

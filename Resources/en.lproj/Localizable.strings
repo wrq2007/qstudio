@@ -37,6 +37,7 @@
 "上下文" = "Context";
 "上下文 %@" = "Context %@";
 "上下文已压缩" = "Context compacted";
+"下一轮生效" = "next turn";
 "下载失败：HTTP %@" = "Download failed: HTTP %@";
 "不限" = "No limit";
 "中文" = "Chinese";
@@ -124,6 +125,7 @@
 "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话或输入 /compact 压缩。" = "Using %@ / %@ tokens (%@%%). Near the limit — answers may get truncated. Start a new chat or type /compact to compact.";
 "已取消压缩" = "Compaction cancelled";
 "已截断" = "Truncated";
+"已记录，本轮输出结束后重载模型生效" = "Queued — the model reloads right after this reply finishes.";
 "带思维链的推理模型。会先输出一大段思考再给正文，需要把输入框右下角的「深度思考」打开。" = "Chain-of-thought reasoning model. Emits a long reasoning block before the answer — enable Deep Thinking at the bottom right of the input box.";
 "平衡" = "Balanced";
 "应对拖延与专注力管理" = "Procrastination & focus";
@@ -241,6 +243,7 @@
 "直接在下面输入来引导模型" = "Type below to guide the model";
 "硬件性能提示" = "Hardware performance note";
 "移除这个附件" = "Remove this attachment";
+"端口 %@ 已被占用，可能是上次异常退出留下的推理进程。" = "Port %@ is already in use — probably a leftover inference process from a previous crash.";
 "精确" = "Precise";
 "系统" = "System";
 "系统提示词" = "System prompt";
@@ -289,7 +292,7 @@
 "这段对话" = "this chat";
 "这段对话还短，不需要压缩" = "This chat is still short — nothing to compact";
 "这段话会作为 system 提示，每次请求都带上，用来引导模型怎么回答。留空就是不加引导。" = "Sent as the system prompt on every request to steer how the model replies. Leave empty for no guidance.";
-"退出程序" = "Quit Q Studio";
+"退出 Q Studio" = "Quit Q Studio";
 "适用范围：Intel x86_64 处理器 + AMD 独立显卡（Polaris / Vega / Navi），macOS 14 及以上。" = "Supported: Intel x86_64 + AMD discrete GPU (Polaris / Vega / Navi), macOS 14+.";
 "选一项，也可以直接在下面输入引导" = "Pick one, or type your own guidance below";
 "选择要附加的文本文件（代码、Markdown、CSV、JSON、日志等）" = "Choose text files to attach (code, Markdown, CSV, JSON, logs…)";

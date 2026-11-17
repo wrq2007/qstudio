@@ -35,6 +35,13 @@ final class ServerController: ObservableObject {
     @Published private(set) var log: String = ""
     @Published var modelPath: String
     @Published var thinkEnabled: Bool
+
+    /// 开关已经改过、但还没落到进程上（生成结束后才重载）。
+    /// 界面据此提示「下一轮生效」，避免用户以为点一下当场就变了。
+    @Published private(set) var thinkPendingApply = false
+
+    /// 当前进程启动时用的开关值：用户来回点两次能靠它判断"其实不用重启"
+    private var activeThink = false
     @Published private(set) var gpuName: String = ""
     @Published private(set) var contextSize: Int = 8192
 
@@ -228,14 +235,29 @@ final class ServerController: ObservableObject {
 
         reapOrphanServer()
 
-        checkHealth { [weak self] alive in
+        // 刚清掉的残留进程不会立刻释放端口，马上 launch 会 bind 失败
+        waitForPortFree { [weak self] in
             guard let self else { return }
-            if alive {
-                self.state = .ready
-                self.appendLog("检测到已在运行的推理服务，直接连接。\n", reset: true)
-            } else {
-                self.launch()
+            self.checkHealth { [weak self] alive in
+                guard let self else { return }
+                if alive {
+                    self.state = .ready
+                    self.appendLog("检测到已在运行的推理服务，直接连接。\n", reset: true)
+                } else {
+                    self.launch()
+                }
             }
+        }
+    }
+
+    /// 轮询等端口空出来（最多 3 秒），再决定是连过去还是自己拉一个
+    private func waitForPortFree(attempt: Int = 0, done: @escaping () -> Void) {
+        if ProcessProbe.listenerPIDs(port: port).isEmpty || attempt >= 15 {
+            done()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.waitForPortFree(attempt: attempt + 1, done: done)
         }
     }
 
@@ -245,7 +267,10 @@ final class ServerController: ObservableObject {
         kvFallbackTried = false
         state = .stopped
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.launch()
+            // 走 start() 而不是直接 launch()：重启前要先清掉可能占着 8080 的残留推理进程，
+            // 并等端口真的释放。之前直接 launch()，只要有一个旧进程霸着端口，
+            // 新进程就 bind 失败，界面报「推理进程退出（状态码 1）」。
+            self?.start()
         }
     }
 
@@ -264,6 +289,20 @@ final class ServerController: ObservableObject {
         guard on != thinkEnabled else { return }
         thinkEnabled = on
         UserDefaults.standard.set(on, forKey: "thinkEnabled")
+        // 生成过程中改这个开关会重载模型，等于把正在输出的内容打断。
+        // 记下来，等这一轮结束再重启——开关对下一轮生效。
+        if ChatStore.shared.isStreaming {
+            thinkPendingApply = (on != activeThink)
+            return
+        }
+        thinkPendingApply = false
+        restart()
+    }
+
+    /// 一轮生成收尾时调用：把生成期间攒下的开关改动落到进程上
+    func applyPendingThinkIfNeeded() {
+        guard thinkPendingApply, !ChatStore.shared.isStreaming else { return }
+        thinkPendingApply = false
         restart()
     }
 
@@ -325,6 +364,7 @@ final class ServerController: ObservableObject {
         pendingNotice = nil
         state = .starting
         startedAt = Date()
+        activeThink = thinkEnabled        // 这一进程真正带上的开关值
 
         let p = Process()
         p.executableURL = executableURL
@@ -379,7 +419,14 @@ final class ServerController: ObservableObject {
                 // 不能把刚拉起的新进程状态一起清掉
                 guard self.process === proc else { return }
                 if case .starting = self.state {
-                    self.startFailed(Lf("推理进程退出（状态码 %lld）", proc.terminationStatus))
+                    var msg = Lf("推理进程退出（状态码 %lld）", proc.terminationStatus)
+                    // 端口被别的进程（多半是上一次启动留下的推理服务）占着时，
+                    // 光给状态码看不出原因，直接把话说清楚
+                    if !ProcessProbe.listenerPIDs(port: self.port).isEmpty {
+                        msg += " " + Lf("端口 %@ 已被占用，可能是上次异常退出留下的推理进程。",
+                                        "\(self.port)")
+                    }
+                    self.startFailed(msg)
                     // startFailed 已经拉起新进程：轮询和 process 都归它，这里不能动
                     guard self.process === proc else { return }
                 } else if case .ready = self.state {
@@ -422,10 +469,12 @@ final class ServerController: ObservableObject {
                 trace("PID \(pid) 取不到可执行路径")
                 continue
             }
+            let name = (path as NSString).lastPathComponent
             let orphan = ProcessProbe.isOrphan(pid: pid)
             let same = ProcessProbe.sameFile(path, ours)
             trace("PID \(pid) 路径=\(path) 同一个文件=\(same) 孤儿=\(orphan)")
-            guard same else { continue }
+            // 只处理推理服务本身，别的进程霸着端口不归我们管
+            guard name == "llama-server" else { continue }
 
             // 父进程还活着 → 是某个正在运行的实例拉起来的，连过去就行
             if !orphan {
@@ -435,6 +484,9 @@ final class ServerController: ObservableObject {
                 return
             }
 
+            // 孤儿一律清掉，不再要求"和我们的可执行文件是同一个文件"：
+            // 重新打包会把旧 app 挪进废纸篓，旧进程的文件路径就变了，
+            // 但它仍然是 llama-server，仍然占着 8080，新进程 bind 必失败。
             let killed = ProcessProbe.terminate(pid: pid)
             trace("终止结果=\(killed)")
             if killed {

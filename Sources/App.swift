@@ -97,6 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             || UserDefaults.standard.bool(forKey: "MDMENUBAR") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { MenuBarController.shared.selfTest() }
         }
+        if ProcessInfo.processInfo.environment["MDTHINKTEST"] == "1"
+            || UserDefaults.standard.bool(forKey: "MDTHINKTEST") {
+            // 等模型加载完再发消息，否则测的是「没就绪」
+            DispatchQueue.main.asyncAfter(deadline: .now() + 18) {
+                ChatStore.shared.selfTestThink(server: ServerController.shared)
+            }
+        }
         if ProcessInfo.processInfo.environment["MDCOMPACTTEST"] == "1"
             || UserDefaults.standard.bool(forKey: "MDCOMPACTTEST") {
             // 等推理服务就绪（自检里会等到 isCompacting 结束再落盘）

@@ -1018,6 +1018,93 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    /// MDTHINKTEST=1：验证「生成过程中切换深度思考」不打断这一轮，而是等这一轮结束再重载。
+    /// 结果落 /tmp/qstudio_think.txt，跑完复原开关、删掉临时会话。
+    func selfTestThink(server: ServerController) {
+        guard ProcessInfo.processInfo.environment["MDTHINKTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDTHINKTEST") else { return }
+        let sid = newSession(select: true)
+        let original = server.thinkEnabled
+        var lines: [String] = []
+        let path = "/tmp/qstudio_think.txt"
+        func dump() {
+            try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+        }
+        func portPIDs() -> String {
+            let pids = ProcessProbe.listenerPIDs(port: server.port)
+            return pids.isEmpty ? "无" : pids.map(String.init).joined(separator: ",")
+        }
+        func stateName() -> String {
+            switch server.state {
+            case .ready: return "ready"
+            case .starting: return "starting"
+            case .stopped: return "stopped"
+            case .failed(let m): return "failed(\(m))"
+            }
+        }
+        func finish() {
+            server.setThinking(original)
+            self.delete(sid)
+            UserDefaults.standard.removeObject(forKey: "MDTHINKTEST")
+            dump()
+        }
+
+        lines.append("初始 thinkEnabled=\(original) 端口PID=\(portPIDs())")
+        dump()
+        send("用 300 字说明玄武岩的成因与柱状节理的形成过程。", server: server)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            let streamingAtToggle = self.isStreaming
+            let pidBefore = portPIDs()
+            server.setThinking(!original)
+            lines.append("--- 生成中切换 ---")
+            lines.append("切换时 isStreaming=\(streamingAtToggle)")
+            lines.append("切换后 thinkEnabled=\(server.thinkEnabled) pending=\(server.thinkPendingApply)")
+            lines.append("端口PID：切换前 \(pidBefore) → 切换后 \(portPIDs())（应立即不变）")
+            lines.append("state=\(stateName())")
+            dump()
+
+            var ticks = 0
+            var forceStopped = false
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { t in
+                ticks += 1
+                if self.isStreaming {
+                    // 开了深度思考时这个小模型会在思维链里绕很久，40 秒还没完就主动停，
+                    // 顺便验证「手动停止后也要落地」这条路径
+                    if ticks >= 40 && !forceStopped {
+                        forceStopped = true
+                        self.stop()
+                        lines.append("生成超过 40 秒，主动 stop() 收尾")
+                        dump()
+                    }
+                    if ticks > 180 { t.invalidate() }
+                    return
+                }
+                guard ticks > 1 else { return }
+                t.invalidate()
+                lines.append("--- 本轮结束 ---")
+                lines.append("此时 isStreaming=\(self.isStreaming) pending=\(server.thinkPendingApply) state=\(stateName()) pid=\(portPIDs())")
+                lines.append("本轮回答长度=\(self.messages.last?.text.count ?? 0)")
+                dump()
+
+                var waited = 0
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { t2 in
+                    waited += 1
+                    var ready = false
+                    if case .ready = server.state { ready = true }
+                    if ready || waited > 120 {
+                        t2.invalidate()
+                        lines.append(ready ? "重载完成" : "等重载超时")
+                        lines.append("state=\(stateName()) pid=\(portPIDs()) thinkEnabled=\(server.thinkEnabled) pending=\(server.thinkPendingApply)")
+                        lines.append("（下面恢复原开关，会再重载一次）")
+                        finish()
+                    }
+                }
+            }
+        }
+    }
+
     /// 让模型给出几个候选方向。
     ///
     /// 用 JSON schema 约束输出（llama.cpp 会转成语法强约束生成），格式一定合法；
@@ -1223,6 +1310,8 @@ final class ChatStore: ObservableObject {
                 self.refreshTokenUsageFallback(server: server)
                 self.finishTurn(id: botID, server: server)
                 self.scheduleSave()
+                // 生成期间用户改过「深度思考」的话，现在才重载模型（不打断刚结束的这一轮）
+                server.applyPendingThinkIfNeeded()
             }
         }
     }
@@ -1233,6 +1322,11 @@ final class ChatStore: ObservableObject {
         task = nil
         flushPending()
         isStreaming = false
+        // 手动停止后也要把生成期间攒下的「深度思考」改动落地。
+        // 延时一下再判断：send() 里会先 stop() 再发新消息，那种情况不能重载模型。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            ServerController.shared.applyPendingThinkIfNeeded()
+        }
     }
 
     private func consume(_ json: String, id: UUID) {

@@ -136,7 +136,7 @@ T = {
 
     # 菜单栏
     "打开主窗口": "Open Q Studio", "最近对话": "Recent chats",
-    "还没有对话": "No chats yet", "退出程序": "Quit Q Studio",
+    "还没有对话": "No chats yet", "退出 Q Studio": "Quit Q Studio",
 
     # 模型管理（只提供网页链接，不在 app 内下载）
     "本机模型": "Local models", "获取模型": "Get Models", "模型管理": "Models",
@@ -203,6 +203,10 @@ T = {
     "关掉，继续正常对话": "Turn off and continue normally",
     "重试": "Retry", "发送（Enter）": "Send (Enter)",
     "深度思考": "Deep Thinking", "思考过程": "Reasoning",
+    "下一轮生效": "next turn",
+    "已记录，本轮输出结束后重载模型生效": "Queued — the model reloads right after this reply finishes.",
+    "端口 %@ 已被占用，可能是上次异常退出留下的推理进程。":
+        "Port %@ is already in use — probably a leftover inference process from a previous crash.",
     "说点什么…": "Say something…", "（暂无输出）": "(no output yet)",
     "效率提升与系统搭建": "Efficiency & system setup",
     "应对拖延与专注力管理": "Procrastination & focus",
