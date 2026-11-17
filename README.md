@@ -168,6 +168,7 @@ Q Studio **不在应用内下载模型**。打开「模型管理 → 获取模�
 - **工作组**：左栏上半是工作组（对话分组），下半是对话。选中组后新开的对话自动归组；也可右键对话加入/移出组。删除组不删对话，只把它们变成未分组。
 - **对话**：流式输出、Markdown、代码高亮、SVG 自动渲染（裸 `<svg>` 也能识别）、思考过程折叠显示、消息级性能指标（token 数 / TPS / 耗时）。
 - **深度思考**：输入框右下角开关，控制模型是否输出思维链（会重载模型）。
+- **公式渲染**：`$$…$$`、`\[…\]` 和整行 `$…$` 用内置 KaTeX 渲染（资源打包进 app，不联网）；夹在句子中间的 `$…$` 仍按原文显示。
 - **KV 缓存量化**：默认开 q8_0，长上下文下省一半 KV 显存；启动失败自动回退 fp16，显存估算同步按实际精度计算。
 - **菜单栏**：常驻菜单栏图标，点开可切最近 5 个对话；关窗口不退出，推理服务继续保留。
 - **归档**：对话右键归档，归档内容在「设置 → 归档的对话」里管理和恢复。
@@ -357,6 +358,7 @@ Other Intel platforms (integrated GPUs, NVIDIA cards with 1401) work in theory b
 - **Workspaces**: left pane is split — groups on top, chats below. New chats are automatically added to the selected group; right-click a chat to add/remove it. Deleting a group doesn't delete its chats, it just ungroups them.
 - **Chat**: streaming output, Markdown, syntax highlighting, automatic SVG rendering (bare `<svg>` supported), collapsible reasoning, per-message performance metrics (token counts / TPS / latency).
 - **Deep Thinking**: toggle at the bottom right of the input box controls whether the model emits chain-of-thought (reloads the model).
+- **Math rendering**: `$$…$$`, `\[…\]` and whole-line `$…$` render through bundled KaTeX (fully offline); `$…$` embedded mid-sentence stays literal for now.
 - **KV cache quantization**: q8_0 by default — halves KV memory at long context. Falls back to fp16 automatically if the model cannot start, and VRAM estimates follow the precision actually in use.
 - **Menu bar**: a status bar icon lists the 5 most recent chats; closing the window no longer quits, so the inference service keeps running.
 - **Archive**: right-click a chat to archive; manage and restore under Settings → Archived chats.

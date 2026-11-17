@@ -18,6 +18,8 @@ enum MDBlock {
     case quote(String)
     case table(headers: [String], rows: [[String]])
     case rule
+    /// 数学公式（KaTeX 渲染）。display = 独立成块、居中
+    case math(String, display: Bool)
 }
 
 // MARK: - 解析器
@@ -49,6 +51,67 @@ enum MarkdownParser {
             result += ns.substring(from: cursor)
         }
         return result
+    }
+
+    /// 识别一条公式。返回 nil 表示这里不是公式（例如流式输出中 $$ 还没闭合）。
+    private static func mathBlock(at index: Int, lines: [String]) -> (latex: String, display: Bool, next: Int)? {
+        let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+
+        // $$ 开头：可以跨行，直到遇到结尾的 $$
+        if trimmed.hasPrefix("$$") {
+            let first = String(trimmed.dropFirst(2))
+            if let end = first.range(of: "$$") {
+                let latex = String(first[..<end.lowerBound]).trimmingCharacters(in: .whitespaces)
+                return latex.isEmpty ? nil : (latex, true, index + 1)
+            }
+            var body: [String] = [first]
+            var j = index + 1
+            while j < lines.count {
+                let l = lines[j]
+                if let r = l.range(of: "$$") {
+                    body.append(String(l[..<r.lowerBound]))
+                    let latex = body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                    return latex.isEmpty ? nil : (latex, true, j + 1)
+                }
+                body.append(l)
+                j += 1
+            }
+            return nil   // 没闭合（流式输出中途）：先按普通文字显示
+        }
+
+        // \[ … \]（可跨行）
+        if trimmed.hasPrefix("\\[") {
+            let opener = "\\["
+            let closer = "\\]"
+            let first = String(trimmed.dropFirst(opener.count))
+            if let r = first.range(of: closer) {
+                let latex = String(first[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+                return latex.isEmpty ? nil : (latex, true, index + 1)
+            }
+            var body: [String] = [first]
+            var j = index + 1
+            while j < lines.count {
+                let l = lines[j]
+                if let r = l.range(of: closer) {
+                    body.append(String(l[..<r.lowerBound]))
+                    let latex = body.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                    return latex.isEmpty ? nil : (latex, true, j + 1)
+                }
+                body.append(l)
+                j += 1
+            }
+            return nil
+        }
+
+        // 整行就是一个 $…$：$x^2 + y^2 = z^2$
+        if trimmed.hasPrefix("$") && trimmed.hasSuffix("$") && trimmed.count > 2 {
+            let inner = String(trimmed.dropFirst().dropLast())
+            // 里面还有 $ 说明不是单条公式，交给普通文本
+            if !inner.contains("$"), !inner.trimmingCharacters(in: .whitespaces).isEmpty {
+                return (inner, false, index + 1)
+            }
+        }
+        return nil
     }
 
     static func parse(_ source: String) -> [MDBlock] {
@@ -99,6 +162,14 @@ enum MarkdownParser {
                 }
                 // 流式输出中 SVG 还没写完时也先渲染已到达的部分（WKWebView 容错）
                 blocks.append(.code(lang: "svg", code: body.joined(separator: "\n")))
+                continue
+            }
+
+            // 数学公式。放在代码块之后：围栏里的 $$ 不该被当成公式。
+            // $$…$$（可跨行）/ \[…\] 走独立成块；整行只有一个 $…$ 时按行内公式渲染。
+            if let math = mathBlock(at: i, lines: lines) {
+                blocks.append(.math(math.latex, display: math.display))
+                i = math.next
                 continue
             }
 
@@ -599,6 +670,10 @@ struct MarkdownView: View {
 
         case .table(let headers, let rows):
             table(headers: headers, rows: rows)
+
+        case .math(let latex, let display):
+            MathBlock(latex: latex, display: display)
+                .frame(maxWidth: .infinity, alignment: display ? .center : .leading)
 
         case .rule:
             Rectangle()

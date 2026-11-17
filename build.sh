@@ -121,6 +121,11 @@ for lproj in en.lproj zh-Hans.lproj; do
     cp -R "$ROOT/Resources/$lproj" "$APP/Contents/Resources/$lproj"
   fi
 done
+# KaTeX（离线公式渲染，禁止走 CDN）
+if [ -d "$ROOT/Resources/katex" ]; then
+  rm -rf "$APP/Contents/Resources/katex"
+  cp -R "$ROOT/Resources/katex" "$APP/Contents/Resources/katex"
+fi
 # 菜单栏模板图（19/38 两档，系统按深浅色自动反色）
 for icon in MenuIcon.png MenuIcon@2x.png; do
   [ -f "$ROOT/Resources/$icon" ] && cp "$ROOT/Resources/$icon" "$APP/Contents/Resources/$icon"

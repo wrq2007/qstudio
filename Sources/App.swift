@@ -79,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         installSignalHandlers()
         MenuBarController.shared.install()
+        if MathSelfTest.enabled {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { MathSelfTest.run() }
+        }
         if ProcessInfo.processInfo.environment["MDMSGTEST"] == "1"
             || UserDefaults.standard.bool(forKey: "MDMSGTEST") {
             // 等推理服务就绪再跑（最多等 60 秒）

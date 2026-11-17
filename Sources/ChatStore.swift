@@ -153,6 +153,33 @@ final class ChatStore: ObservableObject {
         }
         lines.append("--- 合成后的 system（当前会话）---")
         lines.append(Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt))
+        // 顺手核对公式块解析
+        let mathSample = """
+        行内公式 $E=mc^2$ 保持原样。
+
+        $$
+        a^2 + b^2 = c^2
+        $$
+
+        \\[
+        \\int_0^1 x\\,dx = \\frac{1}{2}
+        \\]
+
+        代码围栏里的不算：
+        ```sh
+        echo $$ not math $$
+        ```
+        """
+        let kinds = MarkdownParser.parse(mathSample).map { block -> String in
+            switch block {
+            case .math(let l, let d): return "math(\(d ? "block" : "inline"):\(l.prefix(18)))"
+            case .paragraph: return "para"
+            case .code(let lang, _): return "code(\(lang))"
+            default: return "other"
+            }
+        }
+        lines.append("公式解析：\(kinds.joined(separator: " | "))")
+
         // 顺手把导出结果落盘，核对格式
         if let cur = current {
             try? SessionExporter.markdown(cur).write(toFile: "/tmp/qstudio_export.md",
