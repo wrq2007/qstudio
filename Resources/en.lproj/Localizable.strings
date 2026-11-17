@@ -109,6 +109,7 @@
 "思考过程" = "Reasoning";
 "恢复" = "Restore";
 "所有计算都在本机完成，不联网" = "Everything runs on this Mac — no network";
+"打开主窗口" = "Open Q Studio";
 "打开模型目录" = "Open models folder";
 "打开网页" = "Open page";
 "按" = "Based on";
@@ -140,6 +141,7 @@
 "显存约 %.1f GB，偏小：只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。" = "About %.1f GB VRAM — on the small side. Only quantized models under 1.5B will run; long contexts spill to system memory and slow down.";
 "更多" = "More";
 "最小可用档位。显存占用低、生成快，适合先跑通链路。" = "Smallest usable tier. Low VRAM, fast generation — good for a first run.";
+"最近对话" = "Recent chats";
 "服务器没有返回有效响应" = "Server returned no valid response";
 "服务器返回 HTTP %@" = "Server returned HTTP %@";
 "未分组" = "Ungrouped";
@@ -212,6 +214,7 @@
 "这 %lld 段归档对话及其全部消息会被永久删除，删了就找不回来了。" = "These %lld archived chats and all their messages will be permanently deleted. This cannot be undone.";
 "这是 Apple Silicon 机器" = "This is an Apple Silicon Mac";
 "这段话会作为 system 提示，每次请求都带上，用来引导模型怎么回答。留空就是不加引导。" = "Sent as the system prompt on every request to steer how the model replies. Leave empty for no guidance.";
+"退出程序" = "Quit Q Studio";
 "适用范围：Intel x86_64 处理器 + AMD 独立显卡（Polaris / Vega / Navi），macOS 14 及以上。" = "Supported: Intel x86_64 + AMD discrete GPU (Polaris / Vega / Navi), macOS 14+.";
 "选一项，也可以直接在下面输入引导" = "Pick one, or type your own guidance below";
 "通用" = "General";

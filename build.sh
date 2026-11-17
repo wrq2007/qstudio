@@ -121,6 +121,10 @@ for lproj in en.lproj zh-Hans.lproj; do
     cp -R "$ROOT/Resources/$lproj" "$APP/Contents/Resources/$lproj"
   fi
 done
+# 菜单栏模板图（19/38 两档，系统按深浅色自动反色）
+for icon in MenuIcon.png MenuIcon@2x.png; do
+  [ -f "$ROOT/Resources/$icon" ] && cp "$ROOT/Resources/$icon" "$APP/Contents/Resources/$icon"
+done
 
 echo "==> 签名"
 codesign --force --deep --sign - "$APP" 2>&1 | tail -2 || true

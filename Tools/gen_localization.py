@@ -60,6 +60,10 @@ T = {
     "例如：你是一个地质学导师，回答时先给结论再给依据。":
         "e.g. You are a geology tutor. State the conclusion first, then the evidence.",
 
+    # 菜单栏
+    "打开主窗口": "Open Q Studio", "最近对话": "Recent chats",
+    "还没有对话": "No chats yet", "退出程序": "Quit Q Studio",
+
     # 模型管理（只提供网页链接，不在 app 内下载）
     "本机模型": "Local models", "获取模型": "Get Models", "模型管理": "Models",
     "关闭": "Close",
