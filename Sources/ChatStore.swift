@@ -370,7 +370,7 @@ final class ChatStore: ObservableObject {
         guard server.state.isReady else {
             mutateCurrent { s in
                 s.messages.append(ChatMessage(role: .assistant,
-                                              text: "模型还没准备好（\(server.state.label)），等加载完再发。",
+                                              text: Lf("模型还没准备好（%@），等加载完再发。", server.state.label),
                                               failed: true))
             }
             return
@@ -420,7 +420,7 @@ final class ChatStore: ObservableObject {
         guard server.state.isReady else {
             mutateCurrent { s in
                 s.messages.append(ChatMessage(role: .assistant,
-                                              text: "模型还没准备好（\(server.state.label)），等加载完再问。",
+                                              text: Lf("模型还没准备好（%@），等加载完再问。", server.state.label),
                                               failed: true))
             }
             return
@@ -569,10 +569,10 @@ final class ChatStore: ObservableObject {
 
                 let (bytes, response) = try await self.session.bytes(for: req)
                 guard let http = response as? HTTPURLResponse else {
-                    throw ChatFailure.message("服务器没有返回有效响应")
+                    throw ChatFailure.message(L("服务器没有返回有效响应"))
                 }
                 guard http.statusCode == 200 else {
-                    throw ChatFailure.message("服务器返回 HTTP \(http.statusCode)")
+                    throw ChatFailure.message(Lf("服务器返回 HTTP %@", "\(http.statusCode)"))
                 }
 
                 for try await line in bytes.lines {
@@ -789,8 +789,8 @@ final class ChatStore: ObservableObject {
                 guard let idx = s.messages.firstIndex(where: { $0.id == id }) else { return }
                 s.messages[idx].failed = true
                 s.messages[idx].text = s.messages[idx].text.isEmpty
-                    ? "出错了：\(message)"
-                    : s.messages[idx].text + "\n\n（中断：\(message)）"
+                    ? Lf("出错了：%@", message)
+                    : s.messages[idx].text + "\n\n" + Lf("（中断：%@）", message)
             }
         }
     }

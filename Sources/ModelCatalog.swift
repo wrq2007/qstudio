@@ -50,9 +50,9 @@ struct ModelSpec: Identifiable, Hashable {
 
         var label: String {
             switch self {
-            case .comfortable: return "推荐"
-            case .tight: return "偏紧"
-            case .over: return "超出显存"
+            case .comfortable: return L("推荐")
+            case .tight: return L("偏紧")
+            case .over: return L("超出显存")
             }
         }
     }

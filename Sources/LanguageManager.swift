@@ -33,6 +33,8 @@ final class LanguageManager: ObservableObject {
         self.language = AppLanguage(rawValue: saved) ?? .chinese
     }
 
+    var isEnglish: Bool { language == .english }
+
     /// 给非 SwiftUI 控件用（如 NSTextField 的 placeholder）：
     /// 这些字符串不经过 @Environment(\.locale)，得手动查 bundle。
     func local(_ key: String) -> String {
@@ -50,3 +52,10 @@ final class LanguageManager: ObservableObject {
 
 /// 便捷函数：非 SwiftUI 控件取当前语言的文案
 func L(_ key: String) -> String { LanguageManager.shared.local(key) }
+
+/// 带占位符的文案：key 用中文原文（字典里写 %@ / %lld / %.1f 占位），
+/// 取完译文再用 String(format:) 填值。用于 Text(String)、错误信息、警告这类
+/// 不经过 SwiftUI LocalizedStringKey 查表的地方。
+func Lf(_ key: String, _ args: CVarArg...) -> String {
+    String(format: L(key), arguments: args)
+}

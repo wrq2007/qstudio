@@ -17,8 +17,7 @@ T = {
     "使用": "Use", "设置": "Settings", "更多": "More", "推荐": "Recommended",
     "当前": "Current", "昨天": "Yesterday", "刚刚": "Just now",
     "清空": "Clear", "重命名": "Rename", "归档": "Archive", "取消归档": "Unarchive",
-    "已下载": "Downloaded", "使用中": "In use", "下载": "Download",
-    "继续下载": "Resume", "重新下载": "Redownload", "仍要下载": "Download anyway",
+    "已下载": "Downloaded", "使用中": "In use",
     "新建工作组": "New group", "重命名工作组": "Rename group",
     "新建工作组": "New group", "工作组名称": "Group name",
     "加到工作组": "Add to group", "删除组": "Delete group",
@@ -48,6 +47,9 @@ T = {
     "通用": "General", "归档对话": "Archives", "关于": "About",
     "搜索归档对话": "Search archived chats", "没有匹配的归档对话": "No matching archived chats",
     "搜索对话": "Search chats", "没有匹配的对话": "No matching chats",
+    "全部对话": "All chats", "未分组": "Ungrouped",
+    "对话保存在本机\n~/Library/Application Support/LocalModel":
+        "Chats are stored locally\n~/Library/Application Support/LocalModel",
     "系统提示词": "System prompt", "默认上下文长度": "Default context length",
     "归档的对话": "Archived chats", "关于": "About", "当前模型": "Current model",
     "模型目录": "Models folder", "对话记录": "Chat history", "架构": "Architecture",
@@ -58,20 +60,29 @@ T = {
     "例如：你是一个地质学导师，回答时先给结论再给依据。":
         "e.g. You are a geology tutor. State the conclusion first, then the evidence.",
 
-    # 模型管理
-    "本机模型": "Local models", "在线下载": "Download", "模型管理": "Models",
-    "重新下载这个模型？": "Redownload this model?",
-    "所有镜像源都没能提供这个文件": "No mirror could provide this file",
-    "下载地址不合法": "Invalid download URL",
-    "服务器返回了无法识别的响应": "Unrecognized server response",
-    "无法写入下载文件": "Could not write the download file",
-    "下载文件损坏（不是有效的 GGUF），已丢弃，请重试": "Download corrupted (not valid GGUF), discarded. Please retry",
-    "目标文件正在使用中，不能覆盖。请先切换到别的模型再重试": "Target file is in use and cannot be replaced. Switch to another model first",
-    "已有的同名文件会被移到废纸篓后再下载。如果它正在使用中，下载会被拒绝——请先切换到别的模型。":
-        "The existing file will be moved to Trash before downloading. If it's in use, the download will be refused — switch to another model first.",
-    "删除本地副本并重新下载（会先移到废纸篓）": "Delete local copy and redownload (moved to Trash first)",
-    "~/models、~/Downloads 和 App Support 里都没找到 .gguf 文件。\n切到「在线下载」可以直接拉一个。":
-        "No .gguf files found in ~/models, ~/Downloads, or App Support.\nSwitch to Download to fetch one.",
+    # 模型管理（只提供网页链接，不在 app 内下载）
+    "本机模型": "Local models", "获取模型": "Get Models", "模型管理": "Models",
+    "关闭": "Close",
+    "估算显存": "Est. VRAM", "KV 缓存": "KV cache",
+    "显存": "VRAM", "上下文": "Context",
+    "显存估算 = 权重文件 + KV 缓存(fp16) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。":
+        "VRAM estimate = weights + KV cache (fp16) + runtime overhead (0.6 GB + weights×5%). Estimate only; actual usage varies with context.",
+
+    # 复杂插值拆分出来的前缀/后缀片段（L(片段) + 数字，保证 100% 命中）
+    "建议": "Suggest", "建议用": "recommends", "按": "Based on",
+    "改用推荐的": "Use recommended", "权重": "weights", "条消息": "messages",
+    "装不下": "can't hold", "的 KV 缓存": "KV cache (~",
+    "模型可能加载失败或回退到内存，速度大降。建议不超过": "). The model may fail to load or fall back to memory. Keep at or below",
+    "段对话": "chats", "这": "These",
+    "段归档对话及其全部消息会被永久删除，删了就找不回来了。":
+        "archived chats and all their messages will be permanently deleted. This cannot be undone.",
+    "显存和当前模型（权重": "GB VRAM and the current model (weights",
+    "打开网页": "Open page", "浏览全部 GGUF 模型": "Browse all GGUF models",
+    "~/models、~/Downloads 和 App Support 里都没找到 .gguf 文件。\n到「获取模型」查看推荐链接，下载后放进这些目录。":
+        "No .gguf files found in ~/models, ~/Downloads, or App Support.\nSee Get Models for recommended links, then place downloads there.",
+    "Q Studio 不在应用内下载模型。点击下面的链接在浏览器中打开，下载 .gguf 后放进 ~/models、~/Downloads 或 App Support 目录，回到「本机模型」即可使用。":
+        "Q Studio does not download models in-app. Open the links below in your browser, download a .gguf into ~/models, ~/Downloads, or App Support, then use it from Local models.",
+    "打开模型目录": "Open models folder",
 
     # 运行/推理错误提示（显示给用户的）
     "应用包不完整：找不到内置推理引擎": "App package incomplete: bundled inference engine not found",
@@ -86,6 +97,13 @@ T = {
 
     # 硬件提示
     "硬件性能提示": "Hardware performance note",
+    # 列表相对时间（Lf 填数字）
+    "无法写入 Vulkan 配置": "Could not write Vulkan config",
+    "苹果芯片走的是统一内存 + 原生 Metal 后端，llama.cpp、Ollama、LM Studio 都能直接吃满 GPU，不需要也不应该经 MoltenVK 转发。装这个反而更慢。":
+        "Apple silicon uses unified memory with the native Metal backend; llama.cpp, Ollama and LM Studio all use the GPU directly. Routing through MoltenVK is slower, not faster.",
+    "系统没有报告任何 Metal 加速器，无法运行推理。请确认显卡驱动已正确安装。":
+        "No Metal accelerator reported, so inference cannot run. Check that the GPU driver is installed.",
+
     "这是 Apple Silicon 机器": "This is an Apple Silicon Mac",
     "没有可用的 GPU": "No GPU available",
     "未知": "Unknown", "未知处理器": "Unknown processor",
@@ -172,6 +190,50 @@ INTERP = {
     "服务器返回 HTTP %@": "Server returned HTTP %@",
     "出错了：%@": "Error: %@",
     "下载失败：HTTP %@": "Download failed: HTTP %@",
+
+    # ModelManagerView 带插值的页脚/指标
+    "估算显存 %@ GB": "Est. VRAM %@ GB",
+    "KV 缓存 %@ GB": "KV cache %@ GB",
+    "显存 %@ GB · 上下文 %@": "VRAM %@ GB · Context %@",
+    "显存估算 = 权重文件 + KV 缓存(fp16, ctx %@) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。":
+        "VRAM estimate = weights + KV cache (fp16, ctx %@) + runtime overhead (0.6 GB + weights×5%). Estimate only; actual usage varies with context.",
+
+    # ContentView 上下文/显存档位
+    "建议 %lldK": "Suggest %lldK",
+    "改用推荐的 %lldK": "Use recommended %lldK",
+    "上下文 %@": "Context %@",
+    "显存 %@ GB 装不下 %@K 的 KV 缓存（约 %@ GB）。模型可能加载失败或回退到内存，速度大降。建议不超过 %@K。":
+        "%@ GB VRAM can't hold the %@K KV cache (~%@ GB). The model may fail to load or fall back to memory, slowing down significantly. Keep at or below %@K.",
+
+
+    # 列表相对时间
+    "%lld分钟前": "%lld min ago",
+    "%lld小时前": "%lld h ago",
+    "%lld天前": "%lld days ago",
+    # 硬件信息 / 架构摘要
+    "%lld 层": "%lld layers",
+    "%lld 个 KV 头": "%lld KV heads",
+    "显存约 %.1f GB，偏小：只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。":
+        "About %.1f GB VRAM — on the small side. Only quantized models under 1.5B will run; long contexts spill to system memory and slow down.",
+    # 确认框
+    "仍然改用 %@": "Use %@ anyway",
+    "「%@」会被删除，组里的对话会变成未分组（对话本身不删）。":
+        "\u201c%@\u201d will be deleted. Its chats move to Ungrouped (the chats themselves are kept).",
+    "「%@」及其消息会一起删掉，删了就找不回来了。":
+        "\u201c%@\u201d and its messages will be deleted. This cannot be undone.",
+    "「%@」将被永久删除。": "\u201c%@\u201d will be permanently deleted.",
+    "（中断：%@）": " (interrupted: %@)",
+    # 服务错误
+    "推理进程退出（状态码 %lld）": "Inference process exited (status %lld)",
+    "无法启动推理进程：%@": "Could not start the inference process: %@",
+
+    # SettingsView 归档/上下文
+    "清空 %lld 段对话": "Clear %lld chats",
+    "这 %lld 段归档对话及其全部消息会被永久删除，删了就找不回来了。":
+        "These %lld archived chats and all their messages will be permanently deleted. This cannot be undone.",
+    "%lld 条消息": "%lld messages",
+    "按 %@ GB 显存和当前模型（权重 %@ GB，KV 缓存 %@ GB）建议用 %lldK。":
+        "Based on %@ GB VRAM and the current model (weights %@ GB, KV cache %@ GB), %lldK is recommended.",
 }
 
 def esc(s):

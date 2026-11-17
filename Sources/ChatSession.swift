@@ -85,6 +85,10 @@ struct ChatSession: Identifiable, Codable, Equatable {
         self.groupID = groupID
     }
 
+    /// 标题的显示形态：默认占位标题「新对话」跟随界面语言，其余是用户/模型生成的原文。
+    /// 存储里始终保留中文占位值，标题生成的判断逻辑（title == "新对话"）才不会被语言影响。
+    var displayTitle: String { title == "新对话" ? L("新对话") : title }
+
     /// 用第一条用户消息当标题
     mutating func refreshTitle() {
         guard let first = messages.first(where: { $0.role == .user && !$0.text.isEmpty }) else { return }

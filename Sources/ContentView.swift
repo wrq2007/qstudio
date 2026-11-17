@@ -227,10 +227,11 @@ private struct RefusedView: View {
 
     private func row(_ key: String, _ value: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(key)
+            Text(L(key))
                 .font(.system(size: 11.5))
                 .foregroundStyle(Palette.subtle)
-                .frame(width: 44, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 68, alignment: .leading)
             Text(value)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Palette.text)
@@ -337,30 +338,36 @@ private struct ChatView: View {
             SettingsView()
                 .environmentObject(server)
                 .environmentObject(chat)
+                .localized()
         }
         .confirmationDialog(
-            "显存可能不够",
+            L("显存可能不够"),
             isPresented: Binding(
                 get: { pendingContextSize != nil },
                 set: { if !$0 { pendingContextSize = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("仍然改用 \(pendingContextSize.map { "\($0 / 1024)K" } ?? "")") {
+            Button(Lf("仍然改用 %@", pendingContextSize.map { "\($0 / 1024)K" } ?? "")) {
                 if let size = pendingContextSize { server.setContextSize(size) }
                 pendingContextSize = nil
                 showContextPicker = false
             }
-            Button("取消", role: .cancel) { pendingContextSize = nil }
+            Button(L("取消"), role: .cancel) { pendingContextSize = nil }
         } message: {
             if let a = server.contextAdvice, let size = pendingContextSize {
                 let kv = Double(a.info.kvBytesPerToken * size) / 1_073_741_824
-                Text("显存 \(String(format: "%.0f", a.vramGB)) GB 装不下 \(size / 1024)K 的 KV 缓存（约 \(String(format: "%.1f", kv)) GB）。模型可能加载失败或回退到内存，速度大降。建议不超过 \(a.maxContext / 1024)K。")
+                Text(Lf("显存 %@ GB 装不下 %@K 的 KV 缓存（约 %@ GB）。模型可能加载失败或回退到内存，速度大降。建议不超过 %@K。",
+                        String(format: "%.0f", a.vramGB),
+                        "\(size / 1024)",
+                        String(format: "%.1f", kv),
+                        "\(a.maxContext / 1024)"))
             }
         }
         .onAppear {
             // 自检开关：直接弹出模型管理页，方便截图核对界面
-            if ProcessInfo.processInfo.environment["MDMODELTEST"] != nil {
+            if ProcessInfo.processInfo.environment["MDMODELTEST"] != nil
+                || UserDefaults.standard.bool(forKey: "MDModelPicker") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showModelPicker = true }
             }
             if ProcessInfo.processInfo.environment["MDCTXTEST"] == "1" {
@@ -427,7 +434,7 @@ private struct ChatView: View {
     private var header: some View {
         HStack(spacing: 9) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(chat.current?.title ?? "新对话")
+                Text(chat.current?.displayTitle ?? L("新对话"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.text)
                     .lineLimit(1)
@@ -461,9 +468,11 @@ private struct ChatView: View {
         .background(Palette.background)
         .sheet(isPresented: $showModelPicker) {
             ModelManagerView(current: server.modelPath, vramGB: gpu.vramGB)
+                .localized()
         }
         .sheet(isPresented: $showLog) {
             LogView(log: server.log)
+                .localized()
         }
     }
 
@@ -649,7 +658,7 @@ private struct ChatView: View {
                 .foregroundStyle(Palette.subtle)
                 .fixedSize()
         }
-        .help("已占用 \(used) / \(total) tokens")
+        .help(Lf("已占用 %@ / %@ tokens", "\(used)", "\(total)"))
     }
 
     private var contextPickerList: some View {
@@ -662,12 +671,12 @@ private struct ChatView: View {
                         Image(systemName: "lightbulb")
                             .font(.system(size: 9.5))
                             .foregroundStyle(Color(red: 0.95, green: 0.62, blue: 0.13))
-                        Text("建议 \(a.recommended / 1024)K")
+                        Text("\(L("建议")) \(a.recommended / 1024)K")
                             .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(Palette.text)
                     }
-                    Text("显存 \(String(format: "%.0f", a.vramGB)) GB，权重 \(String(format: "%.1f", a.weightsGB)) GB，"
-                         + "KV 缓存 \(String(format: "%.2f", a.kvGB)) GB")
+                    Text("\(L("显存")) \(String(format: "%.0f", a.vramGB)) GB，\(L("权重")) \(String(format: "%.1f", a.weightsGB)) GB，"
+                         + "\(L("KV 缓存")) \(String(format: "%.2f", a.kvGB)) GB")
                         .font(.system(size: 9))
                         .foregroundStyle(Palette.subtle)
                         .fixedSize(horizontal: false, vertical: true)
@@ -675,7 +684,7 @@ private struct ChatView: View {
                         Button {
                             chooseContext(a.recommended)
                         } label: {
-                            Text("改用推荐的 \(a.recommended / 1024)K")
+                            Text("\(L("改用推荐的")) \(a.recommended / 1024)K")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Palette.accent)
                         }
@@ -938,7 +947,7 @@ private struct ChatView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "text.alignleft")
                                 .font(.system(size: 10.5))
-                            Text("上下文 \(ctxLabel)")
+                            Text("\(L("上下文")) \(ctxLabel)")
                                 .font(.system(size: 11))
                         }
                         .foregroundStyle(Palette.text.opacity(0.85))
@@ -979,7 +988,7 @@ private struct ChatView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(server.thinkEnabled ? "关闭深度思考（会重载模型）" : "开启深度思考，显示推理过程（会重载模型）")
+                    .help(server.thinkEnabled ? L("关闭深度思考（会重载模型）") : L("开启深度思考，显示推理过程（会重载模型）"))
 
                     Button {
                         if chat.isStreaming { chat.stop() } else { send() }
@@ -996,7 +1005,7 @@ private struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!canSend && !chat.isStreaming)
-                    .help(chat.isStreaming ? "停止生成（也可以直接在下面输入来引导）" : "发送（Enter）")
+                    .help(chat.isStreaming ? L("停止生成（也可以直接在下面输入来引导）") : L("发送（Enter）"))
                 }
                 // 浮层用 overlay，不参与布局——否则面板会把输入框撑长
                 .overlay(alignment: .bottomLeading) {

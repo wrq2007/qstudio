@@ -59,43 +59,46 @@ struct SidebarView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(chat)
+                .localized()
         }
         .sheet(isPresented: $showNewGroup) {
             groupNameSheet(isNew: true)
+                .localized()
         }
         .sheet(item: $renamingGroup) { g in
             groupNameSheet(isNew: false, group: g)
+                .localized()
         }
-        .confirmationDialog("删除工作组？", isPresented: Binding(
+        .confirmationDialog(L("删除工作组？"), isPresented: Binding(
             get: { pendingGroupDelete != nil },
             set: { if !$0 { pendingGroupDelete = nil } }
         ), titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+            Button(L("删除"), role: .destructive) {
                 if let g = pendingGroupDelete {
                     chat.deleteGroup(g.id)
                     if chat.selectedGroupID == g.id { chat.selectedGroupID = nil }
                 }
                 pendingGroupDelete = nil
             }
-            Button("取消", role: .cancel) { pendingGroupDelete = nil }
+            Button(L("取消"), role: .cancel) { pendingGroupDelete = nil }
         } message: {
-            Text(pendingGroupDelete.map { "「\($0.name)」会被删除，组里的对话会变成未分组（对话本身不删）。" } ?? "")
+            Text(pendingGroupDelete.map { Lf("「%@」会被删除，组里的对话会变成未分组（对话本身不删）。", $0.name) } ?? "")
         }
         .confirmationDialog(
-            "删除这段对话？",
+            L("删除这段对话？"),
             isPresented: Binding(
                 get: { pendingDelete != nil },
                 set: { if !$0 { pendingDelete = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("删除", role: .destructive) {
+            Button(L("删除"), role: .destructive) {
                 if let s = pendingDelete { chat.delete(s.id) }
                 pendingDelete = nil
             }
             Button("取消", role: .cancel) { pendingDelete = nil }
         } message: {
-            Text(pendingDelete.map { "「\($0.title)」及其消息会一起删掉，删了就找不回来了。" } ?? "")
+            Text(pendingDelete.map { Lf("「%@」及其消息会一起删掉，删了就找不回来了。", $0.title) } ?? "")
         }
     }
 
@@ -117,7 +120,7 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(chat.canCreateNewSession ? Palette.subtle : Palette.subtle.opacity(0.3))
             .disabled(!chat.canCreateNewSession)
-            .help(chat.canCreateNewSession ? "新对话 ⌘N" : "当前已经是新对话了")
+            .help(chat.canCreateNewSession ? L("新对话 ⌘N") : L("当前已经是新对话了"))
 
         }
         .padding(.horizontal, 12)
@@ -176,7 +179,7 @@ struct SidebarView: View {
             Image(systemName: icon)
                 .font(.system(size: 10.5))
                 .foregroundStyle(isSelected ? Palette.accent : Palette.subtle.opacity(0.8))
-            Text(name)
+            Text(isAll ? L("全部对话") : isUngrouped ? L("未分组") : name)
                 .font(.system(size: 11.5, weight: isSelected ? .medium : .regular))
                 .foregroundStyle(isSelected ? Palette.text : Palette.text.opacity(0.82))
                 .lineLimit(1)
@@ -335,7 +338,7 @@ struct SidebarView: View {
                             .font(.system(size: 8.5))
                             .foregroundStyle(Palette.subtle)
                     }
-                    Text(s.title == "新对话" ? L("新对话") : s.title)
+                    Text(s.displayTitle)
                         .font(.system(size: 11.5, weight: isCurrent ? .medium : .regular))
                         .foregroundStyle(isCurrent ? Palette.text : Palette.text.opacity(0.82))
                         .lineLimit(1)
@@ -477,9 +480,9 @@ struct SidebarView: View {
 
         if cal.isDateInToday(date) {
             let mins = Int(now.timeIntervalSince(date) / 60)
-            if mins < 1 { return "刚刚" }
-            if mins < 60 { return "\(mins)分钟前" }
-            return "\(Int(now.timeIntervalSince(date) / 3600))小时前"
+            if mins < 1 { return L("刚刚") }
+            if mins < 60 { return Lf("%lld分钟前", mins) }
+            return Lf("%lld小时前", Int(now.timeIntervalSince(date) / 3600))
         }
 
         // 天数必须按自然日算：dateComponents([.day]) 会把不足一天的部分截掉，
@@ -487,8 +490,8 @@ struct SidebarView: View {
         let dayDiff = cal.dateComponents([.day],
                                         from: cal.startOfDay(for: date),
                                         to: cal.startOfDay(for: now)).day ?? 0
-        if dayDiff == 1 { return "昨天" }
-        if dayDiff < 7 { return "\(dayDiff)天前" }
+        if dayDiff == 1 { return L("昨天") }
+        if dayDiff < 7 { return Lf("%lld天前", dayDiff) }
         return SidebarView.shortDate.string(from: date)
     }
 

@@ -68,25 +68,25 @@ struct SettingsView: View {
             }
         }
         .frame(width: 560, height: 560)
-        .confirmationDialog("清空所有归档？", isPresented: $confirmClearArchived, titleVisibility: .visible) {
-            Button("清空 \(archivedSessions.count) 段对话", role: .destructive) {
+        .confirmationDialog(L("清空所有归档？"), isPresented: $confirmClearArchived, titleVisibility: .visible) {
+            Button(Lf("清空 %lld 段对话", archivedSessions.count), role: .destructive) {
                 chat.deleteAllArchived()
             }
-            Button("取消", role: .cancel) {}
+            Button(L("取消"), role: .cancel) {}
         } message: {
-            Text("这 \(archivedSessions.count) 段归档对话及其全部消息会被永久删除，删了就找不回来了。")
+            Text(Lf("这 %lld 段归档对话及其全部消息会被永久删除，删了就找不回来了。", archivedSessions.count))
         }
-        .confirmationDialog("删除归档？", isPresented: Binding(
+        .confirmationDialog(L("删除归档？"), isPresented: Binding(
             get: { pendingDelete != nil },
             set: { if !$0 { pendingDelete = nil } }
         ), titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+            Button(L("删除"), role: .destructive) {
                 if let s = pendingDelete { chat.delete(s.id) }
                 pendingDelete = nil
             }
-            Button("取消", role: .cancel) { pendingDelete = nil }
+            Button(L("取消"), role: .cancel) { pendingDelete = nil }
         } message: {
-            Text(pendingDelete.map { "「\($0.title)」将被永久删除。" } ?? "")
+            Text(pendingDelete.map { Lf("「%@」将被永久删除。", $0.title) } ?? "")
         }
     }
 
@@ -198,8 +198,11 @@ struct SettingsView: View {
             }
 
             if let a = server.contextAdvice {
-                Text("按 \(String(format: "%.0f", a.vramGB)) GB 显存和当前模型（权重 \(String(format: "%.1f", a.weightsGB)) GB，"
-                     + "KV 缓存 \(String(format: "%.2f", a.kvGB)) GB）建议用 \(a.recommended / 1024)K。")
+                Text(Lf("按 %@ GB 显存和当前模型（权重 %@ GB，KV 缓存 %@ GB）建议用 %lldK。",
+                        String(format: "%.0f", a.vramGB),
+                        String(format: "%.1f", a.weightsGB),
+                        String(format: "%.2f", a.kvGB),
+                        a.recommended / 1024))
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.subtle)
                     .fixedSize(horizontal: false, vertical: true)
@@ -250,8 +253,8 @@ struct SettingsView: View {
                     ForEach(filteredArchives) { s in
                         HStack(spacing: 7) {
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(s.title).font(.system(size: 11.5)).foregroundStyle(Palette.text).lineLimit(1)
-                                Text("\(s.messages.count) 条消息").font(.system(size: 9.5)).foregroundStyle(Palette.subtle)
+                                Text(s.displayTitle).font(.system(size: 11.5)).foregroundStyle(Palette.text).lineLimit(1)
+                                Text("\(s.messages.count) \(L("条消息"))").font(.system(size: 9.5)).foregroundStyle(Palette.subtle)
                             }
                             Spacer(minLength: 4)
                             Button("恢复") { chat.setArchived(s.id, false) }
@@ -292,10 +295,11 @@ struct SettingsView: View {
 
     private func row(_ key: String, _ value: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(key)
+            Text(L(key))
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.subtle)
-                .frame(width: 58, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 98, alignment: .leading)
             Text(value)
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.text)

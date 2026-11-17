@@ -10,10 +10,10 @@ enum ServerState: Equatable {
 
     var label: String {
         switch self {
-        case .stopped:  return "已停止"
-        case .starting: return "加载模型…"
-        case .ready:    return "就绪"
-        case .failed:   return "启动失败"
+        case .stopped:  return L("已停止")
+        case .starting: return L("加载模型…")
+        case .ready:    return L("就绪")
+        case .failed:   return L("启动失败")
         }
     }
 
@@ -157,11 +157,11 @@ final class ServerController: ObservableObject {
         if let p = process, p.isRunning { return }
 
         guard FileManager.default.fileExists(atPath: executableURL.path) else {
-            state = .failed("应用包不完整：找不到内置推理引擎")
+            state = .failed(L("应用包不完整：找不到内置推理引擎"))
             return
         }
         guard !modelPath.isEmpty, FileManager.default.fileExists(atPath: modelPath) else {
-            state = .failed("还没有可用的 GGUF 模型文件")
+            state = .failed(L("还没有可用的 GGUF 模型文件"))
             return
         }
 
@@ -235,7 +235,7 @@ final class ServerController: ObservableObject {
 
     private func launch() {
         guard let icdPath = prepareICD() else {
-            state = .failed("无法写入 Vulkan 配置")
+            state = .failed(L("无法写入 Vulkan 配置"))
             return
         }
 
@@ -280,7 +280,7 @@ final class ServerController: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 if case .starting = self.state {
-                    self.state = .failed("推理进程退出（状态码 \(proc.terminationStatus)）")
+                    self.state = .failed(Lf("推理进程退出（状态码 %lld）", proc.terminationStatus))
                 } else if case .ready = self.state {
                     self.state = .stopped
                 }
@@ -292,7 +292,7 @@ final class ServerController: ObservableObject {
         do {
             try p.run()
         } catch {
-            state = .failed("无法启动推理进程：\(error.localizedDescription)")
+            state = .failed(Lf("无法启动推理进程：%@", error.localizedDescription))
             return
         }
 
@@ -388,7 +388,7 @@ final class ServerController: ObservableObject {
         if case .failed = state { stopPolling(); return }
 
         if let started = startedAt, Date().timeIntervalSince(started) > 300 {
-            state = .failed("加载超时（超过 5 分钟）")
+            state = .failed(L("加载超时（超过 5 分钟）"))
             stopPolling()
             return
         }
@@ -432,7 +432,7 @@ final class ServerController: ObservableObject {
         // Vulkan 没能初始化时要明确失败，而不是默默退化成 CPU
         if state.isBusy {
             if log.contains("No devices found") || log.contains("failed to initialize Vulkan") {
-                state = .failed("Vulkan 后端没有找到可用显卡。请确认 AMD 显卡驱动正常、未被其他进程独占。")
+                state = .failed(L("Vulkan 后端没有找到可用显卡。请确认 AMD 显卡驱动正常、未被其他进程独占。"))
                 stopPolling()
             }
         }

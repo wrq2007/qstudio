@@ -52,7 +52,8 @@ struct ModelManagerView: View {
         .onAppear {
             localModels = ServerController.discoverModels()
             contextSize = ServerController.shared.contextSize
-            if ProcessInfo.processInfo.environment["MDMODELTEST"] == "2" {
+            if ProcessInfo.processInfo.environment["MDMODELTEST"] == "2"
+                || UserDefaults.standard.string(forKey: "MDModelTab") == "remote" {
                 tab = .remote
             }
         }
@@ -119,7 +120,7 @@ struct ModelManagerView: View {
         VStack(spacing: 0) {
             // 顶部说明 + HF 搜索页链接
             VStack(alignment: .leading, spacing: 6) {
-                Text(L("Q Studio 不在应用内下载模型。点击下面的链接在浏览器中打开，下载 .gguf 后放进 ~/models、~/Downloads 或 App Support 目录，回到「本机模型」即可使用。"))
+                Text("Q Studio 不在应用内下载模型。点击下面的链接在浏览器中打开，下载 .gguf 后放进 ~/models、~/Downloads 或 App Support 目录，回到「本机模型」即可使用。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.subtle)
                     .fixedSize(horizontal: false, vertical: true)
@@ -128,7 +129,7 @@ struct ModelManagerView: View {
                         NSWorkspace.shared.open(searchURL)
                     } label: {
                         HStack(spacing: 4) {
-                            Text(L("浏览全部 GGUF 模型"))
+                            Text("浏览全部 GGUF 模型")
                             Image(systemName: "arrow.up.right.square")
                         }
                         .font(.system(size: 10.5))
@@ -165,7 +166,7 @@ struct ModelManagerView: View {
                 chip(spec.quant, tint: Palette.accent)
                 chip(fit.label, tint: fitTint(fit))
                 if installed {
-                    chip(L("已下载"), tint: Color(red: 0.18, green: 0.68, blue: 0.35))
+                    chip("已下载", tint: Color(red: 0.18, green: 0.68, blue: 0.35))
                 }
                 Spacer()
                 if let url = spec.pageURL {
@@ -173,7 +174,7 @@ struct ModelManagerView: View {
                         NSWorkspace.shared.open(url)
                     } label: {
                         HStack(spacing: 3) {
-                            Text(L("打开网页"))
+                            Text("打开网页")
                             Image(systemName: "arrow.up.right.square")
                                 .font(.system(size: 9))
                         }
@@ -193,8 +194,8 @@ struct ModelManagerView: View {
 
             HStack(spacing: 10) {
                 meta(String(format: "%.2f GB", spec.sizeGB))
-                meta(L("估算显存 \(String(format: "%.1f", spec.estimatedVRAMGB(context: contextSize))) GB"))
-                meta(L("KV 缓存 \(String(format: "%.2f", spec.kvCacheGB(context: contextSize))) GB"))
+                meta("\(L("估算显存")) \(String(format: "%.1f", spec.estimatedVRAMGB(context: contextSize))) GB")
+                meta("\(L("KV 缓存")) \(String(format: "%.2f", spec.kvCacheGB(context: contextSize))) GB")
                 Spacer()
             }
         }
@@ -207,7 +208,7 @@ struct ModelManagerView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(L("显存 \(String(format: "%.0f", vramGB)) GB · 上下文 \(String(contextSize))"))
+                Text("\(L("显存")) \(String(format: "%.0f", vramGB)) GB · \(L("上下文")) \(contextSize)")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.subtle)
                 Spacer()
@@ -220,7 +221,7 @@ struct ModelManagerView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.accent)
             }
-            Text(L("显存估算 = 权重文件 + KV 缓存(fp16, ctx \(contextSize)) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。"))
+            Text(Lf("显存估算 = 权重文件 + KV 缓存(fp16, ctx %@) + 运行时开销(0.6 GB + 权重×5%)。只是估算，实际占用随上下文长度浮动。", "\(contextSize)"))
                 .font(.system(size: 9.5))
                 .foregroundStyle(Palette.subtle.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)

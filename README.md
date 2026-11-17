@@ -68,23 +68,18 @@ App 启动时会自动扫描以下三个目录**顶层的 `.gguf` 文件**（不
 |---|---|---|
 | 家目录 `models` | `~/models/` | 推荐，自己下载/软链模型放这里 |
 | 下载目录 | `~/Downloads/` | 浏览器下载完直接能用 |
-| 应用支持目录 | `~/Library/Application Support/LocalModel/models/` | 内置下载器的落地目录 |
+| 应用支持目录 | `~/Library/Application Support/LocalModel/models/` | 推荐长期存放 |
 
 找到的第一个模型会自动设为当前模型，也可以在界面里切换。
 
 > 只要把 `.gguf` 文件放进上面任一目录，重启 App（或在模型管理里重新扫描）即可。
 > 不需要改任何配置。
 
-### 2. 内置下载器放在哪
+### 2. 从哪里获取模型
 
-「模型管理 → 在线下载」下载的模型落到：
+Q Studio **不在应用内下载模型**。打开「模型管理 → 获取模型」可以看到一批经过显存适配标注的推荐模型（Qwen、Llama、Gemma、Phi 等），每个都带一个网页链接——点击后在浏览器中打开模型页，自行下载 `.gguf` 文件，再放进上面任一目录。
 
-```
-~/Library/Application Support/LocalModel/models/
-```
-
-文件名形如 `Qwen3-4B-Instruct-2507-Q4_K_M.gguf`。支持断点续传，镜像默认走 `hf-mirror.com`，失败自动回退 `huggingface.co`。
-**App 不会自动下载任何东西**——只有你点「下载」时才会拉取。
+需要其它模型可点「浏览全部 GGUF 模型」去 Hugging Face / hf-mirror 搜索。**App 本身不联网、不下载任何东西。**
 
 ### 3. 对话数据放在哪
 
@@ -103,14 +98,12 @@ App 启动时会自动扫描以下三个目录**顶层的 `.gguf` 文件**（不
 2. 把 `.gguf` 文件放到 `~/models/` 或 `~/Downloads/`。
 3. 打开 App，启动时自动扫描并选中第一个模型。
 
-### 方式 B：用 App 内置下载器
+### 方式 B：通过推荐链接下载
 
-1. 打开 **模型管理**（工具条左侧的立方体图标）。
-2. 切到「在线下载」标签。
-3. 选一个模型点「下载」——列表里已标注大小和显存适配情况（推荐 / 偏紧 / 超出显存）。
-4. 下载完成后点「使用」。
-
-下载的文件在上一节第 2 个目录，也可以在下载列表点「在访达中显示」直接定位。
+1. 打开 **模型管理**（工具条左侧的立方体图标），切到「获取模型」。
+2. 列表里已标注每个模型的体积和显存适配情况（推荐 / 偏紧 / 超出显存）。
+3. 点「打开网页」在浏览器打开模型页，下载合适量化的 `.gguf`。
+4. 把文件放进 `~/models/`，回到「本机模型」点「使用」。
 
 ### 方式 C：切换已有模型
 
@@ -262,23 +255,18 @@ The app scans the **top level** of these three directories for `.gguf` files (no
 |---|---|---|
 | Home `models` | `~/models/` | Recommended — place your own downloads or symlinks here |
 | Downloads | `~/Downloads/` | Browser downloads just work |
-| App Support | `~/Library/Application Support/LocalModel/models/` | Where the built-in downloader saves |
+| App Support | `~/Library/Application Support/LocalModel/models/` | Recommended for long-term storage |
 
 The first model found becomes the active model; you can also switch in the UI.
 
 > Just put a `.gguf` file in any of the above directories and restart the app (or rescan in Model Manager).
 > No configuration needed.
 
-### 4.2 Built-in downloader location
+### 4.2 Where to get models
 
-Models downloaded via **Model Manager → Download** go to:
+Q Studio **does not download models inside the app**. Open **Model Manager → Get Models** to see a curated list annotated with VRAM fit (Qwen, Llama, Gemma, Phi, etc.), each with a web link — click to open the model page in your browser, download the `.gguf`, then place it in one of the directories above.
 
-```
-~/Library/Application Support/LocalModel/models/
-```
-
-Filenames look like `Qwen3-4B-Instruct-2507-Q4_K_M.gguf`. Resumable downloads, mirrored via `hf-mirror.com` with automatic fallback to `huggingface.co`.
-**The app never downloads anything on its own** — only when you click Download.
+For anything else, use "Browse all GGUF models" to search Hugging Face / hf-mirror. **The app itself never goes online or downloads anything.**
 
 ### 4.3 Chat data location
 
@@ -297,14 +285,12 @@ Filenames look like `Qwen3-4B-Instruct-2507-Q4_K_M.gguf`. Resumable downloads, m
 2. Put the `.gguf` file in `~/models/` or `~/Downloads/`.
 3. Open the app — it scans and selects the first model at launch.
 
-### B. Use the built-in downloader
+### B. Follow a recommended link
 
-1. Open **Models** (the cube icon in the toolbar).
-2. Switch to the **Download** tab.
-3. Pick a model and click Download — the list shows size and VRAM fit (Recommended / Tight / Out of VRAM).
-4. Once downloaded, click **Use**.
-
-The file lands in the directory from 4.2; you can also click "Reveal in Finder" in the download list.
+1. Open **Models** (the cube icon in the toolbar), switch to **Get Models**.
+2. The list shows each model's size and VRAM fit (Recommended / Tight / Out of VRAM).
+3. Click **Open page** to open the model page in your browser and download a suitable quantized `.gguf`.
+4. Put the file in `~/models/`, then click **Use** under the Local models tab.
 
 ### C. Switch an existing model
 

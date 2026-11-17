@@ -25,8 +25,8 @@ struct GGUFInfo {
 
     var summary: String {
         var parts: [String] = []
-        if blockCount > 0 { parts.append("\(blockCount) 层") }
-        if headCountKV > 0 { parts.append("\(headCountKV) 个 KV 头") }
+        if blockCount > 0 { parts.append(Lf("%lld 层", blockCount)) }
+        if headCountKV > 0 { parts.append(Lf("%lld 个 KV 头", headCountKV)) }
         if headDim > 0 { parts.append("head_dim \(headDim)") }
         return parts.joined(separator: " · ")
     }

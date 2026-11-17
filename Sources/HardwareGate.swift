@@ -152,19 +152,16 @@ enum HardwareGate {
     static func evaluate(_ profile: MachineProfile) -> Verdict {
         if profile.isAppleSilicon {
             return .refused(
-                title: "这是 Apple Silicon 机器",
-                reason: """
-                苹果芯片走的是统一内存 + 原生 Metal 后端，llama.cpp、Ollama、LM Studio 都能直接吃满 GPU，\
-                不需要也不应该经 MoltenVK 转发。装这个反而更慢。
-                """
+                title: L("这是 Apple Silicon 机器"),
+                reason: L("苹果芯片走的是统一内存 + 原生 Metal 后端，llama.cpp、Ollama、LM Studio 都能直接吃满 GPU，不需要也不应该经 MoltenVK 转发。装这个反而更慢。")
             )
         }
 
         // 没有任何 Metal 加速器：Vulkan 路径无从谈起，真的跑不了
         guard let gpu = profile.gpus.first else {
             return .refused(
-                title: "没有可用的 GPU",
-                reason: "系统没有报告任何 Metal 加速器，无法运行推理。请确认显卡驱动已正确安装。"
+                title: L("没有可用的 GPU"),
+                reason: L("系统没有报告任何 Metal 加速器，无法运行推理。请确认显卡驱动已正确安装。")
             )
         }
 
@@ -176,24 +173,15 @@ enum HardwareGate {
         var warnings: [String] = []
 
         if chosen.isIntelIntegrated {
-            warnings.append("""
-            当前是 Intel 核显（\(chosen.name)）：与系统内存共享带宽，推理速度会明显偏慢，\
-            建议选 1.5B 以下的小模型并把上下文调到 2K–4K。
-            """)
+            warnings.append(Lf("当前是 Intel 核显（%@）：与系统内存共享带宽，推理速度会明显偏慢，建议选 1.5B 以下的小模型并把上下文调到 2K–4K。", chosen.name))
         } else if chosen.isNVIDIA {
-            warnings.append("""
-            检测到 NVIDIA 显卡（\(chosen.name)）。请确认已安装 NullMoth 1401 / nvidia-macos-driver \
-            且 Metal 状态为 supported——没有 Metal 驱动时 MoltenVK 看不到这张卡，推理会退回 CPU 或失败。
-            """)
+            warnings.append(Lf("检测到 NVIDIA 显卡（%@）。请确认已安装 NullMoth 1401 / nvidia-macos-driver 且 Metal 状态为 supported——没有 Metal 驱动时 MoltenVK 看不到这张卡，推理会退回 CPU 或失败。", chosen.name))
         } else if !chosen.isAMD {
-            warnings.append("未识别的显卡型号（\(chosen.name)），性能表现未知，建议先用小模型试跑。")
+            warnings.append(Lf("未识别的显卡型号（%@），性能表现未知，建议先用小模型试跑。", chosen.name))
         }
 
         if chosen.vramGB < 2.0 {
-            warnings.append("""
-            显存约 \(String(format: "%.1f", chosen.vramGB)) GB，偏小：\
-            只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。
-            """)
+            warnings.append(Lf("显存约 %.1f GB，偏小：只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。", chosen.vramGB))
         }
 
         return .supported(chosen, warning: warnings.isEmpty ? nil : warnings.joined(separator: "\n\n"))

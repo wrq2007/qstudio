@@ -39,6 +39,19 @@ private struct LocaleHost<Content: View>: View {
     }
 }
 
+/// Sheet / 独立窗口的内容不会稳定继承外层的 `\.locale`（macOS 上表现为：
+/// Text("中文") 仍是中文，而走 L() 的文案已经翻译）。所以每个 sheet 根部都套一层。
+struct LocalizedEnvironment: ViewModifier {
+    @ObservedObject private var lang = LanguageManager.shared
+    func body(content: Content) -> some View {
+        content.environment(\.locale, lang.language.locale)
+    }
+}
+
+extension View {
+    func localized() -> some View { modifier(LocalizedEnvironment()) }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSources: [DispatchSourceSignal] = []
 
