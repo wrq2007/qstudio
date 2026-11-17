@@ -121,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             || UserDefaults.standard.bool(forKey: "MDSCROLLTEST") {
             ScrollSelfTest.schedule()
         }
+        SafetySelfTest.schedule()
     }
 
     /// 被 kill / 注销 / 终端信号打断时也要回收推理子进程，否则它会变成孤儿一直占着显存。

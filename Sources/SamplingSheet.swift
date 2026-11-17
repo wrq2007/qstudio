@@ -34,13 +34,14 @@ struct SamplingSheet: View {
                 .foregroundStyle(Palette.accent)
             }
 
-            Text(L("只影响这段对话下一轮开始的生成。温度低更稳、更容易重复；温度高更发散、更容易跑题。"))
+            Text(L("只影响这段对话下一轮开始的生成。温度低更稳、更容易重复；温度高更发散、更容易跑题。最小概率砍掉长尾词，调高更少编造，也更容易说车轱辘话。"))
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.subtle)
                 .fixedSize(horizontal: false, vertical: true)
 
             slider(L("温度"), value: $p.temperature, range: 0...2, format: "%.2f")
             slider(L("Top-P"), value: $p.topP, range: 0.1...1, format: "%.2f")
+            slider(L("最小概率"), value: $p.minP, range: 0...0.3, format: "%.2f")
             slider(L("重复惩罚"), value: $p.repeatPenalty, range: 0.8...1.5, format: "%.2f")
 
             HStack(spacing: 10) {
@@ -83,7 +84,7 @@ struct SamplingSheet: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .frame(width: 440, height: 340)
+        .frame(width: 440, height: 376)
         .onAppear { p = chat.sampling(for: sessionID) }
     }
 

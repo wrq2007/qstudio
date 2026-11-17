@@ -752,8 +752,9 @@ final class ChatStore: ObservableObject {
                 continue
             }
             if m.isChoice && !includeChoice { continue }
-            // fullContent：附件正文拼在用户问题前面，附件单独发出的消息也能进历史
-            let content = m.fullContent
+            // promptContent：有附件时把正文包进 <资料> 并绑定「只依据资料回答」，
+            // 没有附件时就是纯文本——那句约束不出现，正常问答和写代码不受影响
+            let content = m.role == .user ? m.promptContent : m.text
             guard !content.isEmpty else { continue }
             history.append(["role": m.role == .user ? "user" : "assistant", "content": content])
         }
@@ -935,9 +936,12 @@ final class ChatStore: ObservableObject {
             lines2.append("--- 端到端 ---")
             lines2.append("用户消息带附件：\(user?.attachments?.count ?? 0) 个；text 为空=\(user?.text.isEmpty ?? true)")
             lines2.append("fullContent 前缀：\((user?.fullContent ?? "").prefix(120).replacingOccurrences(of: "\n", with: "⏎"))")
+            let pc = user?.promptContent ?? ""
+            lines2.append("promptContent 含 <资料>=\(pc.contains("<资料>")) 含约束=\(pc.contains("资料中没有提到这一点")) 问题在末尾=\(pc.hasSuffix(user?.text ?? "␀"))")
+            lines2.append("promptContent 开头：\(String(pc.prefix(60)).replacingOccurrences(of: "\n", with: "⏎"))")
             lines2.append("payload 条数：\(self.buildPayload().count)")
             if let p = self.buildPayload().first(where: { $0["role"] == "user" }) {
-                lines2.append("payload 里 user 段长度：\((p["content"] ?? "").count) 字；含代号=\((p["content"] ?? "").contains("玄武-7"))")
+                lines2.append("payload 里 user 段长度：\((p["content"] ?? "").count) 字；含代号=\((p["content"] ?? "").contains("玄武-7"))；含约束=\((p["content"] ?? "").contains("资料中没有提到这一点"))")
             }
             lines2.append("模型回答：\(reply?.text.replacingOccurrences(of: "\n", with: " ").prefix(200) ?? "（无）")")
             lines2.append("回答里含 玄武-7：\((reply?.text ?? "").contains("玄武-7"))")
@@ -1240,6 +1244,7 @@ final class ChatStore: ObservableObject {
         body["temperature"] = sampling.temperature
         body["top_p"] = sampling.topP
         body["top_k"] = sampling.topK
+        body["min_p"] = sampling.minP
         body["repeat_penalty"] = sampling.repeatPenalty
         body["max_tokens"] = sampling.maxTokens
         if sampling.seed >= 0 { body["seed"] = sampling.seed }

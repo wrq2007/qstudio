@@ -102,6 +102,7 @@ enum ContextCompactor {
             "stream": false,
             "temperature": 0.2,
             "top_p": 0.9,
+            "min_p": 0.05,
             "max_tokens": 900
         ]
         do {
