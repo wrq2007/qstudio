@@ -153,6 +153,15 @@ final class ChatStore: ObservableObject {
         }
         lines.append("--- 合成后的 system（当前会话）---")
         lines.append(Self.composeSystem(identity: Self.identityPrompt, role: current?.rolePrompt))
+        // 顺手把导出结果落盘，核对格式
+        if let cur = current {
+            try? SessionExporter.markdown(cur).write(toFile: "/tmp/qstudio_export.md",
+                                                     atomically: true, encoding: .utf8)
+            if let d = SessionExporter.jsonData(cur, modelName: "test-model") {
+                try? d.write(to: URL(fileURLWithPath: "/tmp/qstudio_export.json"))
+            }
+            lines.append("导出文件名：\(SessionExporter.suggestedName(cur, format: .markdown))")
+        }
         // 顺手验证 GGUF 里的采样推荐值解析（配合 /tmp/fake_sampling.gguf）
         if let info = GGUFInspector.read(at: URL(fileURLWithPath: "/tmp/fake_sampling.gguf")) {
             let sp = info.sampling

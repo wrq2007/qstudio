@@ -65,6 +65,7 @@
 "切换后立即生效，无需重启。" = "Takes effect immediately, no restart needed.";
 "刚刚" = "Just now";
 "创建" = "Create";
+"创建时间：" = "Created: ";
 "删除" = "Delete";
 "删除工作组？" = "Delete group?";
 "删除归档？" = "Delete archive?";
@@ -75,6 +76,7 @@
 "加到工作组" = "Add to group";
 "加载模型…" = "Loading model…";
 "加载超时（超过 5 分钟）" = "Loading timed out (over 5 minutes)";
+"助手" = "Assistant";
 "发散" = "Creative";
 "发送（Enter）" = "Send (Enter)";
 "取消" = "Cancel";
@@ -100,6 +102,7 @@
 "对话历史" = "Chats";
 "对话文件损坏，原件已另存为 sessions.corrupt.json，本次从空对话开始。" = "Chat file is corrupt; original saved as sessions.corrupt.json. Starting empty.";
 "对话记录" = "Chat history";
+"导出…" = "Export…";
 "就绪" = "Ready";
 "工作与生活的平衡" = "Work-life balance";
 "工作组" = "Groups";
@@ -166,6 +169,7 @@
 "显存和当前模型（权重" = "GB VRAM and the current model (weights";
 "显存约 %.1f GB，偏小：只能跑 1.5B 以下的量化模型，长上下文会溢出到内存导致变慢。" = "About %.1f GB VRAM — on the small side. Only quantized models under 1.5B will run; long contexts spill to system memory and slow down.";
 "更多" = "More";
+"最后更新：" = "Last updated: ";
 "最大长度" = "Max tokens";
 "最小可用档位。显存占用低、生成快，适合先跑通链路。" = "Smallest usable tier. Low VRAM, fast generation — good for a first run.";
 "最近对话" = "Recent chats";
@@ -198,6 +202,7 @@
 "没有可用的 GPU" = "No GPU available";
 "测试" = "Test";
 "浏览全部 GGUF 模型" = "Browse all GGUF models";
+"消息数：" = "Messages: ";
 "润色" = "Polish";
 "深度思考" = "Deep Thinking";
 "清空" = "Clear";
@@ -207,6 +212,7 @@
 "温度" = "Temperature";
 "玄武岩和花岗岩成因上有什么区别？" = "How do basalt and granite differ in origin?";
 "用三句话解释板块运动" = "Explain plate tectonics in three sentences";
+"用户" = "User";
 "用模板新建对话" = "New chat from template";
 "界面语言" = "Interface Language";
 "的 KV 缓存" = "KV cache (~";
@@ -233,6 +239,7 @@
 "补充说明…" = "Add a note…";
 "装不下" = "can't hold";
 "角色提示词" = "Role prompt";
+"角色提示词：" = "Role prompt:";
 "设置" = "Settings";
 "设置：系统提示词、上下文默认值" = "Settings: system prompt, context defaults";
 "试着问点什么" = "Ask something to get started";

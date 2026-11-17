@@ -426,6 +426,15 @@ struct SidebarView: View {
                 Label(s.archived ? "取消归档" : "归档",
                       systemImage: s.archived ? "tray.and.arrow.up" : "archivebox")
             }
+            Menu {
+                ForEach(SessionExporter.Format.allCases) { f in
+                    Button(f.label) {
+                        _ = SessionExporter.save(s, format: f, modelName: ServerController.shared.modelName)
+                    }
+                }
+            } label: {
+                Label("导出…", systemImage: "square.and.arrow.up")
+            }
             Button(role: .destructive) {
                 pendingDelete = s
             } label: {

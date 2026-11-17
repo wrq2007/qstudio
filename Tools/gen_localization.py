@@ -78,6 +78,11 @@ T = {
     "用模板新建对话": "New chat from template",
     "打开模板文件": "Open templates file",
 
+    # 导出
+    "导出…": "Export…", "用户": "User", "助手": "Assistant",
+    "创建时间：": "Created: ", "最后更新：": "Last updated: ", "消息数：": "Messages: ",
+    "角色提示词：": "Role prompt:", "思考过程": "Reasoning",
+
     # 消息级操作
     "重新生成": "Regenerate", "继续生成": "Continue", "编辑并重发…": "Edit and resend…",
     "复制": "Copy", "删除这条": "Delete message", "编辑消息": "Edit message",
