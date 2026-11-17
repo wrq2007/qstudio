@@ -79,6 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         installSignalHandlers()
         MenuBarController.shared.install()
+        if ProcessInfo.processInfo.environment["MDMSGTEST"] == "1"
+            || UserDefaults.standard.bool(forKey: "MDMSGTEST") {
+            // 等推理服务就绪再跑（最多等 60 秒）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+                ChatStore.shared.selfTestMessages(server: ServerController.shared)
+            }
+        }
         if ProcessInfo.processInfo.environment["MDRPTEST"] == "1"
             || UserDefaults.standard.bool(forKey: "MDRPTEST") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { ChatStore.shared.dumpRoleTestIfNeeded() }

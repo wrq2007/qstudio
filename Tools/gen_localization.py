@@ -72,6 +72,16 @@ T = {
         "Applies to subsequent turns of this chat. Lower temperature is steadier but repeats more; higher temperature wanders further.",
     "调整采样参数：温度、Top-K、重复惩罚等": "Tune sampling: temperature, top-K, repeat penalty",
 
+    # 消息级操作
+    "重新生成": "Regenerate", "继续生成": "Continue", "编辑并重发…": "Edit and resend…",
+    "复制": "Copy", "删除这条": "Delete message", "编辑消息": "Edit message",
+    "保存并重发": "Save and resend",
+    "改完这条会重新提问：它之后的回答都会被删掉重来。":
+        "Resending re-asks from this message: everything after it is deleted and regenerated.",
+    "删除这条消息？": "Delete this message?",
+    "只删这一条，其他消息不受影响。对话历史里少一段上下文，之后的回答可能不如原来连贯。":
+        "Only this message is removed. The chat loses a piece of context, so later answers may be less coherent.",
+
     # 上下文用量
     "建议新开话题": "Start a new chat",
     "已占用 %@ / %@ tokens（%@%%）。接近上限，回答开始被截断，建议开新对话。":

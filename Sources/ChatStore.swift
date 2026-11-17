@@ -515,6 +515,114 @@ final class ChatStore: ObservableObject {
         send(text, server: server)
     }
 
+    // MARK: - 消息级操作
+
+    /// 正在编辑重发的消息（nil = 没打开编辑器）
+    @Published var editingMessageID: UUID?
+    /// 待删除确认的消息
+    @Published var pendingDeleteMessageID: UUID?
+
+    /// 拼这一轮要发出去的完整历史（identity + 角色 + 除指定消息外的全部消息）
+    private func payloadExcluding(_ excludedID: UUID?) -> [[String: String]] {
+        var payload: [[String: String]] = []
+        payload.append(["role": "system",
+                        "content": Self.composeSystem(identity: Self.identityPrompt,
+                                                      role: current?.rolePrompt)])
+        for m in messages where m.id != excludedID && !m.failed && !m.text.isEmpty {
+            payload.append(["role": m.role == .user ? "user" : "assistant", "content": m.text])
+        }
+        return payload
+    }
+
+    /// 重新生成：删掉这条及之后的消息，用剩下的前缀重发。
+    /// 前缀没变，服务端命中 prompt cache，比整段重发快得多。
+    func regenerate(_ id: UUID, server: ServerController) {
+        guard server.state.isReady else { return }
+        guard let idx = messages.firstIndex(where: { $0.id == id }),
+              messages[idx].role == .assistant else { return }
+        if isStreaming { stop() }
+        let botID = UUID()
+        mutateCurrent { s in
+            s.messages.removeSubrange(idx...)
+            s.messages.append(ChatMessage(id: botID, role: .assistant))
+        }
+        isStreaming = true
+        generatedTokens = 0
+        run(payload: payloadExcluding(botID), forceQuestion: false, botID: botID, server: server,
+            sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
+    }
+
+    /// 继续生成：把已有回答留在上下文里，接着往下写（新的气泡，不覆盖原文）
+    func continueGeneration(server: ServerController) {
+        guard server.state.isReady, !isStreaming else { return }
+        guard let last = messages.last, last.role == .assistant, !last.text.isEmpty else { return }
+        let botID = UUID()
+        mutateCurrent { s in s.messages.append(ChatMessage(id: botID, role: .assistant)) }
+        isStreaming = true
+        generatedTokens = 0
+        run(payload: payloadExcluding(botID), forceQuestion: false, botID: botID, server: server,
+            sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
+    }
+
+    /// 删掉一条消息（确认框由界面负责）
+    func deleteMessage(_ id: UUID) {
+        mutateCurrent { s in s.messages.removeAll { $0.id == id } }
+        scheduleSave()
+    }
+
+    /// 编辑用户消息并重发：改完把它之后的回答全部作废，从这条重新问
+    func editAndResend(_ id: UUID, to newText: String, server: ServerController) {
+        let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, server.state.isReady else { return }
+        guard let idx = messages.firstIndex(where: { $0.id == id }),
+              messages[idx].role == .user else { return }
+        if isStreaming { stop() }
+        let botID = UUID()
+        mutateCurrent { s in
+            s.messages[idx].text = text
+            s.messages.removeSubrange((idx + 1)...)
+            s.messages.append(ChatMessage(id: botID, role: .assistant))
+        }
+        isStreaming = true
+        generatedTokens = 0
+        run(payload: payloadExcluding(botID), forceQuestion: false, botID: botID, server: server,
+            sampling: current?.samplingParams ?? SamplingParams.Preset.balanced.params)
+    }
+
+    /// MDMSGTEST=1：在临时会话里跑一遍「重新生成」，核对截断与重新生成的结果。
+    /// 跑完把临时会话删掉，不污染真实数据。
+    func selfTestMessages(server: ServerController) {
+        guard ProcessInfo.processInfo.environment["MDMSGTEST"] == "1"
+                || UserDefaults.standard.bool(forKey: "MDMSGTEST") else { return }
+        let sid = newSession(select: true)
+        let targetID = UUID()
+        mutateCurrent { s in
+            s.messages = [
+                ChatMessage(role: .user, text: "用一句话说明砂岩和页岩的区别。"),
+                ChatMessage(id: targetID, role: .assistant, text: "砂岩颗粒粗，页岩颗粒细。"),
+                ChatMessage(role: .user, text: "那它们的孔隙度呢？"),
+                ChatMessage(role: .assistant, text: "砂岩孔隙度通常更高。")
+            ]
+        }
+        regenerate(targetID, server: server)   // 应截断到第 1 条之后
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            guard let self, let cur = self.sessions.first(where: { $0.id == sid }) else { return }
+            var lines = ["截断后消息数：\(cur.messages.count)（期望 2：1 条 user + 1 条新回答）"]
+            for m in cur.messages {
+                lines.append("\(m.role == .user ? "user" : "bot ")：\(m.text.prefix(24))")
+            }
+            lines.append("isStreaming=\(self.isStreaming)")
+            try? lines.joined(separator: "\n").write(toFile: "/tmp/qstudio_msg.txt",
+                                                     atomically: true, encoding: .utf8)
+            self.delete(sid)
+        }
+    }
+
+    func message(_ id: UUID) -> ChatMessage? {
+        messages.first { $0.id == id }
+    }
+
     /// 让模型给出几个候选方向。
     ///
     /// 用 JSON schema 约束输出（llama.cpp 会转成语法强约束生成），格式一定合法；

@@ -512,6 +512,27 @@ private struct ChatView: View {
                 .environmentObject(chat)
                 .localized()
         }
+        .sheet(item: Binding(
+            get: { chat.editingMessageID.map { RoleEditTarget(id: $0) } },
+            set: { if $0 == nil { chat.editingMessageID = nil } }
+        )) { target in
+            MessageEditSheet(messageID: target.id)
+                .environmentObject(chat)
+                .environmentObject(server)
+                .localized()
+        }
+        .confirmationDialog(L("删除这条消息？"), isPresented: Binding(
+            get: { chat.pendingDeleteMessageID != nil },
+            set: { if !$0 { chat.pendingDeleteMessageID = nil } }
+        ), titleVisibility: .visible) {
+            Button(L("删除"), role: .destructive) {
+                if let id = chat.pendingDeleteMessageID { chat.deleteMessage(id) }
+                chat.pendingDeleteMessageID = nil
+            }
+            Button(L("取消"), role: .cancel) { chat.pendingDeleteMessageID = nil }
+        } message: {
+            Text(L("只删这一条，其他消息不受影响。对话历史里少一段上下文，之后的回答可能不如原来连贯。"))
+        }
     }
 
     /// 模型文件名往往很长，顶栏只显示掐头去尾的缩写
@@ -547,7 +568,8 @@ private struct ChatView: View {
                     ForEach(chat.messages.filter { !$0.isChoice }) { msg in
                         MessageRow(
                             message: msg,
-                            streaming: chat.isStreaming && msg.id == chat.messages.last?.id
+                            streaming: chat.isStreaming && msg.id == chat.messages.last?.id,
+                            isLast: msg.id == chat.messages.last(where: { !$0.isChoice })?.id
                         )
                     }
                     // 底部哨兵：用它在 scroll 坐标系里的位置判断用户是否还贴着底部
@@ -1172,6 +1194,11 @@ private struct ViewportHeightKey: PreferenceKey {
 private struct MessageRow: View {
     let message: ChatMessage
     let streaming: Bool
+    /// 这条是不是最后一条（「继续生成」只在最后一条上有意义）
+    let isLast: Bool
+
+    @EnvironmentObject private var chat: ChatStore
+    @EnvironmentObject private var server: ServerController
 
     /// 单行短消息要让气泡贴合文字；多行/含代码表格的交给 560 上限换行
     private var isShortBubble: Bool {
@@ -1230,6 +1257,43 @@ private struct MessageRow: View {
             )
 
             if message.role == .assistant { Spacer(minLength: 70) }
+        }
+        .contextMenu { messageMenu }
+    }
+
+    @ViewBuilder
+    private var messageMenu: some View {
+        if message.role == .assistant {
+            Button {
+                chat.regenerate(message.id, server: server)
+            } label: {
+                Label("重新生成", systemImage: "arrow.clockwise")
+            }
+            if isLast && !chat.isStreaming {
+                Button {
+                    chat.continueGeneration(server: server)
+                } label: {
+                    Label("继续生成", systemImage: "arrow.down.to.line")
+                }
+            }
+        } else {
+            Button {
+                chat.editingMessageID = message.id
+            } label: {
+                Label("编辑并重发…", systemImage: "square.and.pencil")
+            }
+        }
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(message.text, forType: .string)
+        } label: {
+            Label("复制", systemImage: "doc.on.doc")
+        }
+        Divider()
+        Button(role: .destructive) {
+            chat.pendingDeleteMessageID = message.id
+        } label: {
+            Label("删除这条", systemImage: "trash")
         }
     }
 

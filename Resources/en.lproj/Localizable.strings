@@ -45,6 +45,7 @@
 "例如：你是一个地质学导师，回答时先给结论再给依据。" = "e.g. You are a geology tutor. State the conclusion first, then the evidence.";
 "保存" = "Save";
 "保存为 .svg 文件" = "Save as .svg";
+"保存并重发" = "Save and resend";
 "偏紧" = "Tight";
 "停止生成（也可以直接在下面输入来引导）" = "Stop generating (or type below to guide)";
 "全部对话" = "All chats";
@@ -67,6 +68,8 @@
 "删除工作组？" = "Delete group?";
 "删除归档？" = "Delete archive?";
 "删除组" = "Delete group";
+"删除这条" = "Delete message";
+"删除这条消息？" = "Delete this message?";
 "删除这段对话？" = "Delete this chat?";
 "加到工作组" = "Add to group";
 "加载模型…" = "Loading model…";
@@ -75,6 +78,7 @@
 "发送（Enter）" = "Send (Enter)";
 "取消" = "Cancel";
 "取消归档" = "Unarchive";
+"只删这一条，其他消息不受影响。对话历史里少一段上下文，之后的回答可能不如原来连贯。" = "Only this message is removed. The chat loses a piece of context, so later answers may be less coherent.";
 "只影响「%@」这段对话：告诉模型该怎么回答（领域、语气、格式）。留空就只用固定的身份提示词。" = "Affects only “%@”: tells the model how to answer (domain, tone, format). Leave it empty to use just the fixed identity prompt.";
 "只影响这段对话下一轮开始的生成。温度低更稳、更容易重复；温度高更发散、更容易跑题。" = "Applies to subsequent turns of this chat. Lower temperature is steadier but repeats more; higher temperature wanders further.";
 "只给之后新建的对话用：告诉模型该怎么回答（领域、语气、格式）。已有对话各自带着自己的角色提示词，改这里不会影响它们；要改某一段，去输入框上方那条提示点编辑。" = "Applies to chats you create from now on: tells the model how to answer (domain, tone, format). Existing chats keep their own role prompt and are unaffected — to change one, click the banner above the composer.";
@@ -85,6 +89,7 @@
 "在设置里修改系统提示词" = "Edit system prompt in Settings";
 "在访达中显示" = "Reveal in Finder";
 "处理器" = "Processor";
+"复制" = "Copy";
 "复制 SVG 源码" = "Copy SVG source";
 "复制代码" = "Copy code";
 "多语言" = "Multilingual";
@@ -134,6 +139,7 @@
 "推荐" = "Recommended";
 "搜索对话" = "Search chats";
 "搜索归档对话" = "Search archived chats";
+"改完这条会重新提问：它之后的回答都会被删掉重来。" = "Resending re-asks from this message: everything after it is deleted and regenerated.";
 "改用推荐的" = "Use recommended";
 "改用推荐的 %lldK" = "Use recommended %lldK";
 "效率提升与系统搭建" = "Efficiency & system setup";
@@ -206,7 +212,10 @@
 "系统没有报告任何 Metal 加速器，无法运行推理。请确认显卡驱动已正确安装。" = "No Metal accelerator reported, so inference cannot run. Check that the GPU driver is installed.";
 "经典 7B，英文指令跟随稳，中文偏弱。" = "Classic 7B: solid English instruction following, weaker in Chinese.";
 "绘图中…" = "Rendering…";
+"继续生成" = "Continue";
 "综合性价比最高的一档。中文和日常问答都够用，显存占用不到 3 GB。" = "Best overall value. Good for Chinese and everyday Q&A, under 3 GB VRAM.";
+"编辑并重发…" = "Edit and resend…";
+"编辑消息" = "Edit message";
 "编辑角色提示词…" = "Edit role prompt…";
 "编辑这段对话的角色提示词" = "Edit this chat's role prompt";
 "聊一句就会自动出现在这里" = "Start a chat and it will appear here";
@@ -251,6 +260,7 @@
 "重命名工作组" = "Rename group";
 "重复惩罚" = "Repeat penalty";
 "重新加载模型" = "Reload model";
+"重新生成" = "Regenerate";
 "重试" = "Retry";
 "长文本" = "Long context";
 "随机" = "Random";
